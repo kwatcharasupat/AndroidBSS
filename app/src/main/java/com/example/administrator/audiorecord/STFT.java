@@ -166,7 +166,6 @@ public class STFT {
         //Log.i("DEBUG", "Preparing scaling vector");
         setScalingVec(false);   // false for inverse fft
 
-
         this.invOutput = new double[nChannels][nSamples];
 
         Log.i("DEBUG", "Running InvSTFT");
@@ -181,8 +180,9 @@ public class STFT {
                 System.arraycopy(reSTFT[c][i], 0, reInputFrame, 0, nFreq);
 
                 //Log.i("DEBUG", "Reconstructing real");
+
                 for (int j = 0; j < winLen / 2 - 1; j++) {
-                    reInputFrame[nFreq + j] = reSTFT[c][i][nFreq - 1 - j];
+                    reInputFrame[nFreq + j] = reSTFT[c][i][nFreq - 2 - j];
                 }
 
                 //Log.i("DEBUG", "Copying imag STFT to frame");
@@ -190,7 +190,7 @@ public class STFT {
 
                 //Log.i("DEBUG", "Reconstructing imag");
                 for (int j = 0; j < winLen / 2 - 1; j++) {
-                    imInputFrame[nFreq + j] = -imSTFT[c][i][nFreq - 1 - j];
+                    imInputFrame[nFreq + j] = -imSTFT[c][i][nFreq - 2 - j];
                 }
 
                 //Log.i("DEBUG", "Displaying real");

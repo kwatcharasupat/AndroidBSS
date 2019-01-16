@@ -192,51 +192,34 @@ public class STFTActivity extends AppCompatActivity {
 
         STFT stft = new STFT();
 
-        int winLen = 1024, nOverlap = 512;
+        int winLen = 2048, nOverlap = 1024;
         String winFunc = "sine";
 
-        testLen = 2048;
+        testLen = audioDataLength;
 
         fakeData = new double[NUM_CHANNELS][testLen];
 
-        Random rnd = new Random(100);
-
         double freq = 440.0;
 
+        Random rnd = new Random(100);
+
+
+
         for (int c = 0; c < NUM_CHANNELS; c++){
-            Arrays.fill(fakeData[c], (c+1)*5.0);
+            for(int i = 0; i < testLen; i++){
+                fakeData[c][i] = rnd.nextDouble();
+            }
         }
 
         reSig = new double[NUM_CHANNELS][testLen];
 
-        stft.stftm(fakeData, winLen, nOverlap, winFunc);
+        stft.stftm(audioData, winLen, nOverlap, winFunc);
 
         reSTFT = new double[NUM_CHANNELS][stft.get_nFrames()][stft.get_nFreq()];
         imSTFT = new double[NUM_CHANNELS][stft.get_nFrames()][stft.get_nFreq()];
 
         reSTFT = stft.getReSTFT();
         imSTFT = stft.getImSTFT();
-
-        Log.i("DEBUG", "Actual size of audioData channel 1 = " + fakeData[0].length);
-        Log.i("DEBUG", "Actual size of audioData channel 2 = " + fakeData[0].length);
-        Log.i("DEBUG", "Expected nFrames = " + stft.get_nFrames());
-        Log.i("DEBUG", "Actual nFrames of reSTFT = " + reSTFT[0].length);
-        Log.i("DEBUG", "Expected nFreq = " + stft.get_nFreq());
-        Log.i("DEBUG", "Actual nFreq of reSTFT = " + reSTFT[0][0].length);
-        Log.i("DEBUG", "Displaying reSTFT");
-        for (int c = 0; c < NUM_CHANNELS; c++) {
-            for (int i = 0; i < stft.get_nFrames(); i++) {
-                Log.i("DEBUG", Arrays.toString(reSTFT[c][i]));
-            }
-        }
-
-        Log.i("DEBUG", "Actual nFreq of imSTFT = " + reSTFT[0][0].length);
-        Log.i("DEBUG", "Displaying imSTFT");
-        for (int c = 0; c < NUM_CHANNELS; c++) {
-            for (int i = 0; i < stft.get_nFrames(); i++) {
-                Log.i("DEBUG", Arrays.toString(imSTFT[c][i]));
-            }
-        }
 
         //stft.istftm(reSTFT, imSTFT, winLen, nOverlap, winFunc, testLen);
         stft.istftm(reSTFT, imSTFT, winLen, nOverlap, winFunc, testLen);
@@ -301,14 +284,14 @@ public class STFTActivity extends AppCompatActivity {
         for (int i = 0; i < NUM_CHANNELS; i++) {
             for (int j = 0; j < testLen; j++) {
 
-                absDiff[i][j] = abs(fakeData[i][j] - reSig[i][j]);
+                absDiff[i][j] = abs(audioData[i][j] - reSig[i][j]);
 
                 Log.i("DEBUGTest",
                         "i = " + i + ", j = " + j
-                                + ", x = " + fakeData[i][j]
+                                + ", x = " + audioData[i][j]
                                 + ", x_hat = " + reSig[i][j]
                                 + ", diff = " + absDiff[i][j]
-                                + ", ratio = " + 100 * reSig[i][j] / fakeData[i][j]);
+                                + ", ratio = " + 100 * reSig[i][j] / audioData[i][j]);
             }
         }
     }
