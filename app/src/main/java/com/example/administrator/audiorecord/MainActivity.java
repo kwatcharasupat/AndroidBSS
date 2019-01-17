@@ -72,6 +72,7 @@ public class MainActivity extends AppCompatActivity {
         });
 
         stopButton = findViewById(R.id.bStopRecord);
+        stopButton.setEnabled(false);
         stopButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -83,6 +84,7 @@ public class MainActivity extends AppCompatActivity {
         });
 
         playButton = findViewById(R.id.bPlayRecord);
+        playButton.setEnabled(false);
         playButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -134,6 +136,8 @@ public class MainActivity extends AppCompatActivity {
         recorder.release();
         recorder = null;
         recordingThread = null;
+
+        Log.i("DEBUG","Recording stopped");
     }
 
 
@@ -183,6 +187,8 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void playRecording(String filePath) {
+
+        Log.i("DEBUG","Now playing");
 
         playingInProgress.set(true);
 
@@ -241,6 +247,8 @@ public class MainActivity extends AppCompatActivity {
         audioTrack.release();
 
         playingInProgress.set(false);
+
+        Log.i("DEBUG","Playback ended");
     }
 
     public void launchSTFTactivity(View view) {

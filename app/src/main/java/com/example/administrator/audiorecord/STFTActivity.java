@@ -35,7 +35,7 @@ public class STFTActivity extends AppCompatActivity {
     double[][][] reSTFT, imSTFT;
     double[][] reSig;
 
-    double[][] fakeData;
+    //double[][] fakeData;
     int testLen;
 
     TextView textView;
@@ -68,10 +68,10 @@ public class STFTActivity extends AppCompatActivity {
 
                 readButton.setEnabled(false);
 
-                Log.i("DEBUG", "Read file button clicked");
+                //Log.i("DEBUG", "Read file button clicked");
                 readPCM();
+
                 rawDataToChannels();
-                Log.i("DEBUG", "PCM successfully saved to double array");
 
                 runSTFT();
 
@@ -90,6 +90,9 @@ public class STFTActivity extends AppCompatActivity {
     }
 
     private void readPCM() {
+
+        Log.i("DEBUG", "Reading PCM to short array");
+
         int BufferSize;
         InputStream inputStream; //FileInputStream is a subclass of InputStream. Keep the highest type
         DataInputStream dataInputStream;
@@ -107,36 +110,41 @@ public class STFTActivity extends AppCompatActivity {
             audioDataLength = BufferSize / 2;
 
             inputStream = new FileInputStream(file);
-            Log.i("DEBUG", "inputStream has been created.");
+            //Log.i("DEBUG", "inputStream has been created.");
 
             dataInputStream = new DataInputStream(inputStream);
-            Log.i("DEBUG", "dataInputStream has been created.");
+            //Log.i("DEBUG", "dataInputStream has been created.");
 
             shortData = new short[BufferSize];  // very impt to allocate memory to the array
-            Log.i("DEBUG", "Memory has been allocated for shortData array.");
+            //Log.i("DEBUG", "Memory has been allocated for shortData array.");
 
 
             for (int i = 0; i < BufferSize; i++) {
                 short result = dataInputStream.readShort();
-                Log.i("DEBUG", "readShort() returns " + result);
+                //Log.i("DEBUG", "readShort() returns " + result);
 
                 shortData[i] = result;
-                Log.i("DEBUG", "and passed " + shortData[i] + " to shortData array");
+                //Log.i("DEBUG", "and passed " + shortData[i] + " to shortData array");
             }
 
 
-            Log.i("DEBUG", "Expected size of shortData = " + BufferSize);
-            Log.i("DEBUG", "Actual size of shortData = " + shortData.length);
+            //Log.i("DEBUG", "Expected size of shortData = " + BufferSize);
+            //Log.i("DEBUG", "Actual size of shortData = " + shortData.length);
 
 
         } catch (FileNotFoundException e) {
-            Log.i("File not found", "" + e);
+            Log.e("File not found", "" + e);
         } catch (IOException e) {
             e.printStackTrace();
         }
+
+        Log.i("DEBUG", "PCM successfully saved to short array");
     }
 
     private void rawDataToChannels() {
+
+        Log.i("DEBUG", "Formatting short array to channels");
+
         audioData = new double[NUM_CHANNELS][audioDataLength];
 
         for (int j = 0; j < NUM_CHANNELS; j++) {
@@ -149,10 +157,11 @@ public class STFTActivity extends AppCompatActivity {
         }
 
 
-        Log.d("DEBUG", "Expected size of audioData = " + audioDataLength);
-        Log.d("DEBUG", "Actual size of audioData channel 1 = " + audioData[0].length);
-        Log.d("DEBUG", "Actual size of audioData channel 2 = " + audioData[0].length);
+        //Log.d("DEBUG", "Expected size of audioData = " + audioDataLength);
+        //Log.d("DEBUG", "Actual size of audioData channel 1 = " + audioData[0].length);
+        //Log.d("DEBUG", "Actual size of audioData channel 2 = " + audioData[0].length);
 
+        Log.i("DEBUG", "Formatting completed. PCM successfully saved to double array");
     }
 
     private void runSTFT() {
@@ -187,8 +196,7 @@ public class STFTActivity extends AppCompatActivity {
 
     private void runSTFTtest() {
 
-
-        Log.i("DEBUG", "Running STFT");
+        Log.i("DEBUG", "Running STFT Test");
 
         STFT stft = new STFT();
 
@@ -197,19 +205,20 @@ public class STFTActivity extends AppCompatActivity {
 
         testLen = audioDataLength;
 
-        fakeData = new double[NUM_CHANNELS][testLen];
+        //fakeData = new double[NUM_CHANNELS][testLen];
 
-        double freq = 440.0;
+        //double freq = 440.0;
 
-        Random rnd = new Random(100);
+        //Random rnd = new Random(100);
 
-
+        /*
 
         for (int c = 0; c < NUM_CHANNELS; c++){
             for(int i = 0; i < testLen; i++){
                 fakeData[c][i] = rnd.nextDouble();
             }
         }
+        */
 
         reSig = new double[NUM_CHANNELS][testLen];
 
@@ -226,13 +235,16 @@ public class STFTActivity extends AppCompatActivity {
 
         reSig = stft.getRealSigFromInvSTFT();
 
+        /*
         Log.i("DEBUG", "Displaying reSig");
         for (int c = 0; c < NUM_CHANNELS; c++) {
                 Log.i("DEBUG", Arrays.toString(reSig[c]));
         }
+        */
 
-        Log.i("DEBUG", "Inverse STFT ran");
+        //Log.i("DEBUG", "Inverse STFT ran");
 
+        /*
         paddedInv = new double[NUM_CHANNELS][stft.getPaddedLength()];
         paddedInv = stft.getInvPaddedOutput();
 
@@ -243,11 +255,10 @@ public class STFTActivity extends AppCompatActivity {
                 }
             }
         }
-
-
+        */
 
         testSTFT();
-        Log.i("DEBUG", "Test ran");
+        Log.i("DEBUG", "STFT Test completed");
     }
 
     private class STFTRunnable implements Runnable {
@@ -279,19 +290,21 @@ public class STFTActivity extends AppCompatActivity {
 
     private void testSTFT() {
 
+        Log.i("DEBUG", "Checking inverse against original value");
+
         double[][] absDiff = new double[NUM_CHANNELS][testLen];
 
         for (int i = 0; i < NUM_CHANNELS; i++) {
-            for (int j = 0; j < testLen; j++) {
+            for (int j = 20000; j < 20500; j++) {
 
                 absDiff[i][j] = abs(audioData[i][j] - reSig[i][j]);
 
                 Log.i("DEBUGTest",
-                        "i = " + i + ", j = " + j
+                        "Channel = " + (i+1) + ", sample = " + j
                                 + ", x = " + audioData[i][j]
                                 + ", x_hat = " + reSig[i][j]
                                 + ", diff = " + absDiff[i][j]
-                                + ", ratio = " + 100 * reSig[i][j] / audioData[i][j]);
+                                + ", ratio = " + (100 * reSig[i][j] / audioData[i][j]));
             }
         }
     }

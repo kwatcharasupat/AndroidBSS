@@ -129,9 +129,12 @@ public class STFT {
                 System.arraycopy(imInputFrame, 0, this.imOutput[c][i], 0, this.nFreq);
             }
         }
+        Log.i("DEBUG", "STFT completed");
     }
 
     void istftm(double[][][] reSTFT, double[][][] imSTFT, int winLen, int nOverlap, String winFunc, int nSamples) {
+
+        Log.i("DEBUG", "Inverse STFT running");
 
         this.reOutput = reSTFT;
         this.imOutput = imSTFT;
@@ -168,11 +171,10 @@ public class STFT {
 
         this.invOutput = new double[nChannels][nSamples];
 
-        Log.i("DEBUG", "Running InvSTFT");
         for (int c = 0; c < nChannels; c++) {
-            Log.i("DEBUG", "Channel " + c);
+            //Log.i("DEBUG", "Channel " + c);
             for (int i = 0; i < inv_nFrames; i++) {
-                Log.i("DEBUG", "Frame " + i + " out of " + inv_nFrames);
+                //Log.i("DEBUG", "Frame " + i + " out of " + inv_nFrames);
                 double[] reInputFrame = new double[winLen];
                 double[] imInputFrame = new double[winLen];
 
@@ -229,7 +231,7 @@ public class STFT {
             System.arraycopy(invPaddedOutput[c], nOverlap, this.invOutput[c], 0, nSamples);
 
             //Log.i("DEBUG", "invOutput: " + Arrays.toString(invOutput[c]));
-            Log.i("DEBUG", "istft done");
+            Log.i("DEBUG", "Inverse STFT completed");
         }
     }
 
@@ -257,7 +259,7 @@ public class STFT {
             }
             iswin[i] = 1.0 / swin[i];
         }
-        Log.i("DEBUG", Arrays.toString(iswin));
+        //Log.i("DEBUG", Arrays.toString(iswin));
     }
 
     private void getSTFTwindow(String winFunc) {
@@ -304,7 +306,7 @@ public class STFT {
         /*   http://creativecommons.org/licenses/by/1.0/          */
         /*--------------------------------------------------------*/
 
-        Log.i("DEBUG", "FFT running");
+        //Log.i("DEBUG", "FFT running");
 
         int nFrames;
 
