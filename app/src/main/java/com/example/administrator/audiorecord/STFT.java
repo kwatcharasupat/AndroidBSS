@@ -13,16 +13,14 @@ import static java.lang.Math.sqrt;
 
 public class STFT {
 
+    /*
+    Multichannel Short Time Fourier Transform and Inverse Short Time Fourier Transform for Java
+    2018 (c) Karn Watcharasupat, GNU Public License v3.0
+     */
 
-    private int winLen;
-    private int hopSize;
-    private int nOverlap;
-    private int nFrames;
-    private int nSamples;
-    private int nChannels;
+    private int winLen, hopSize, nOverlap, nFrames;
+    private int nSamples, nChannels, nFreq;
     private int paddedLength;
-    private int nFreq;
-    private int inv_nFreq;
 
     private double[] window;
     private double[] iswin;
@@ -32,41 +30,42 @@ public class STFT {
     private double[][][] reOutput;
     private double[][][] imOutput;
 
+    private int inv_nFreq;
     private double[][] invPaddedOutput;
     private double[][] invOutput;
 
-    STFT() {
-    }
-
-    double[][] getInvPaddedOutput() {
-        return this.invPaddedOutput;
-    }
-
-    int getPaddedLength() {
-        return paddedLength;
-    }
-
-    double[][][] getReSTFT() {
-        return this.reOutput;
-    }
-
-    double[][][] getImSTFT() {
-        return this.imOutput;
-    }
-
-    double[][] getRealSigFromInvSTFT() {
-        return this.invOutput;
-    }
-
-    int get_nFrames() {
-        return nFrames;
-    }
-
-    int get_nFreq() {
-        return nFreq;
-    }
+    STFT() {    }
 
     void stftm(double[][] input, int winLen, int nOverlap, String winFunc) {
+
+        /*
+        Multichannel Short Time Fourier Transform
+
+        Parameters
+        ----------
+        input: double[][] (nChannels by nSamples)
+            raw multichannel signal
+
+        winLen: int
+            window length
+
+        nOverlap: int
+            number of overlapping samples
+
+        winFunc: String
+            window function
+
+        Output
+        ------
+        reSTFT: double[][][] (nChannels by nFrames by nFreq)
+            real part of the STFT representation of input signal
+            call getReSTFT() to obtain the matrix
+
+        imSTFT: double[][][] (nChannels by nFrames by nFreq)
+            imaginary part of the STFT representation of input signal
+            call getImSTFT() to obtain the matrix
+         */
+
         Log.i("DEBUG", "STFT running");
 
         this.input = input;
@@ -263,23 +262,48 @@ public class STFT {
     }
 
     private void getSTFTwindow(String winFunc) {
-        if (winFunc.equals("sine")) {
-            getSineWindow();
-        } else if (winFunc.equals("hann")) {
-            getHannWindow();
+        switch (winFunc) {
+            case "sine":
+                // sine window
+                for (int i = 0; i < winLen; i++) {
+                    window[i] = sin(PI / winLen * ((double) i + 0.5));
+                }
+                break;
+            case "hann":
+                // hann window
+                for (int i = 0; i < winLen; i++) {
+                    window[i] = 0.5 * (1 - cos(2 * PI * i / (winLen - 1)));
+                }
+
         }
     }
 
-    private void getHannWindow() {
-        for (int i = 0; i < winLen; i++) {
-            window[i] = 0.5 * (1 - cos(2 * PI * i / (winLen - 1)));
-        }
+    double[][] getInvPaddedOutput() {
+        return this.invPaddedOutput;
     }
 
-    private void getSineWindow() {
-        for (int i = 0; i < winLen; i++) {
-            window[i] = sin(PI / winLen * ((double) i + 0.5));
-        }
+    int getPaddedLength() {
+        return paddedLength;
+    }
+
+    double[][][] getReSTFT() {
+        return this.reOutput;
+    }
+
+    double[][][] getImSTFT() {
+        return this.imOutput;
+    }
+
+    double[][] getRealSigFromInvSTFT() {
+        return this.invOutput;
+    }
+
+    int get_nFrames() {
+        return nFrames;
+    }
+
+    int get_nFreq() {
+        return nFreq;
     }
 
     int fft(double x[], double y[]) {
@@ -374,7 +398,7 @@ public class STFT {
         //Log.i("DEBUG", "IFFT running");
 
         if (reInputFrame.length != imInputFrame.length) {
-            //Log.i("DEBUG", "Real and imag are of unequal lengths!");
+            Log.i("DEBUG", "Real and imag are of unequal lengths!");
             return -1;
         } else {
             inv_nFreq = reInputFrame.length;

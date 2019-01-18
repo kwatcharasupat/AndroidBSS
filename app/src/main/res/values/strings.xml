@@ -4,9 +4,10 @@
     <string name="start_recording">Start Recording</string>
     <string name="play_recorded_audio">Play Recorded Audio</string>
     <string name="next">Next</string>
-    <string name="textview">This is a new Activity</string>
+    <string name="textview">(put file name here)</string>
     <string name="STFTActivity_name">STFT Options</string>
     <string name="play_left_channel">Play Left Channel</string>
     <string name="play_right_channel">Play Right Channel</string>
     <string name="read_file">Read file</string>
+    <string name="run_stft_test">Run STFT (Test)</string>
 </resources>

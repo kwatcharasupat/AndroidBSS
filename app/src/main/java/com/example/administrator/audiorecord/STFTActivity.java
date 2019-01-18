@@ -15,12 +15,9 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Arrays;
-import java.util.Random;
 
 import static android.os.Environment.getExternalStorageDirectory;
-import static java.lang.Math.PI;
 import static java.lang.Math.abs;
-import static java.lang.Math.sin;
 
 
 // package com.google.corp.productivity.specialprojects.android.fft
@@ -178,7 +175,7 @@ public class STFTActivity extends AppCompatActivity {
 
         Arrays.fill(x, 1);
 
-        stft.fft(x,y);
+        stft.fft(x, y);
 
         Log.i("DEBUG", "x_stft_re: " + Arrays.toString(x));
         Log.i("DEBUG", "x_stft_im: " + Arrays.toString(y));
@@ -186,7 +183,7 @@ public class STFTActivity extends AppCompatActivity {
         Arrays.fill(x, 1);
         Arrays.fill(y, 0);
 
-        stft.ifft(x,y);
+        stft.ifft(x, y);
 
         Log.i("DEBUG", "x_hat: " + Arrays.toString(x));
         Log.i("DEBUG", "y_hat: " + Arrays.toString(y));
@@ -292,21 +289,34 @@ public class STFTActivity extends AppCompatActivity {
 
         Log.i("DEBUG", "Checking inverse against original value");
 
+        //int offcount = 0;
+
         double[][] absDiff = new double[NUM_CHANNELS][testLen];
+        double[][] ratioDiff = new double[NUM_CHANNELS][testLen];
 
         for (int i = 0; i < NUM_CHANNELS; i++) {
-            for (int j = 20000; j < 20500; j++) {
+            for (int j = 0; j < testLen; j++) {
 
                 absDiff[i][j] = abs(audioData[i][j] - reSig[i][j]);
+                ratioDiff[i][j] = 100 * reSig[i][j] / audioData[i][j];
+
+                /*
+                if (abs(ratioDiff[i][j] - 100) > 0.1) {
+                    offcount++;
+                }
+                */
 
                 Log.i("DEBUGTest",
-                        "Channel = " + (i+1) + ", sample = " + j
+                        "Channel = " + (i + 1) + ", sample = " + j
                                 + ", x = " + audioData[i][j]
                                 + ", x_hat = " + reSig[i][j]
                                 + ", diff = " + absDiff[i][j]
-                                + ", ratio = " + (100 * reSig[i][j] / audioData[i][j]));
+                                + ", ratio = " + ratioDiff[i][j]);
             }
         }
+
+        //Log.i("DEBUGTest", "Off count = " + offcount);
+
     }
 }
 
