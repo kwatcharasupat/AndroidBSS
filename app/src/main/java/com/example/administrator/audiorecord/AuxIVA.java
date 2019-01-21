@@ -1,5 +1,7 @@
 package com.example.administrator.audiorecord;
 
+import android.util.Log;
+
 import static java.lang.Math.cosh;
 import static java.lang.Math.log;
 import static java.lang.Math.pow;
@@ -60,6 +62,8 @@ public class AuxIVA {
             imaginary part of the STFT representation of separated signal
          */
 
+        Log.i("DEBUG", "AuxIVA now preparing");
+
         this.nChannels = reSTFTin.length;
         this.nFrames = reSTFTin[0].length;
         this.nFreq = reSTFTin[0][0].length;
@@ -70,7 +74,9 @@ public class AuxIVA {
         this.reSTFTin = new double[this.nChannels][this.nFrames][this.nFreq];
         this.imSTFTin = new double[this.nChannels][this.nFrames][this.nFreq];
 
+
         // preemptively prevents the original STFT data from being modified
+        Log.i("DEBUG", "Creating a duplicate of STFT data");
         for (int c = 0; c < this.nChannels; c++) {
             for (int i = 0; i < this.nFrames; i++) {
                 System.arraycopy(reSTFTin[c][i], 0, this.reSTFTin[c][i], 0, this.nFreq);
@@ -79,7 +85,9 @@ public class AuxIVA {
         }
 
         // initializing the demixing matrix
+        Log.i("DEBUG", "Initializing demixing matrix");
         if ((reW0 == null) || (imW0 == null)) {
+            Log.i("DEBUG", "Initializing with identity");
             this.reW = new double[this.nSrc][this.nChannels][this.nFreq];
             this.imW = new double[this.nSrc][this.nChannels][this.nFreq];
 
@@ -93,6 +101,7 @@ public class AuxIVA {
                 }
             }
         } else {
+            Log.i("DEBUG", "Initializing with specified value");
             this.reW = reW0;
             this.imW = imW0;
         }
@@ -106,21 +115,19 @@ public class AuxIVA {
 
         this.r = new double[this.nSrc][this.nFrames];
         this.G_r = new double[this.nSrc][this.nFrames];
-        this.reV = new double[this.nChannels][this.nChannels][this.nSrc][this.nFreq];
-        this.imV = new double[this.nChannels][this.nChannels][this.nSrc][this.nFreq];
+        this.reV = new double[this.nSrc][this.nFreq][this.nChannels][this.nChannels];
+        this.imV = new double[this.nSrc][this.nFreq][this.nChannels][this.nChannels];
     }
 
     public void run() {
         for (int runCount = 0; runCount < nItr; runCount++) {
 
+            // demixing
             demix(this.reSTFTout, this.imSTFTout,
                     this.reSTFTin, this.imSTFTin,
                     this.reW, this.imW);
 
-            if (isProjBack) {
-                //project back
-            }
-
+            // calculate r and G/r
             for (int s = 0; s < nSrc; s++) {
                 for (int i = 0; i < nFrames; i++) {
                     double sum = 0;
@@ -129,13 +136,137 @@ public class AuxIVA {
                     }
                     r[s][i] = sqrt(sum);
 
-                    G_r[s][i] = calcContrastFunc(contrastFunc,"df",r[s][i]) / r[s][i];
+                    G_r[s][i] = calcContrastFunc(contrastFunc, "df", r[s][i]) / r[s][i];
                 }
             }
 
 
+            // calculate weighted covariance matrix V
+            for (int s = 0; s < nSrc; s++) {
+                for (int f = 0; f < nFreq; f++) {
+                    for (int i = 0; i < nChannels; i++) {
+                        for (int j = 0; j < nChannels; j++) {
+                            for (int t = 0; t < nFrames; t++) {
+                                reV[s][f][i][j] += complexMultiply(
+                                        reSTFTin[i][t][f], imSTFTin[i][t][f],
+                                        reSTFTin[j][t][f], -imSTFTin[j][t][f])[0]
+                                        * G_r[s][t];
+                                imV[s][f][i][j] += complexMultiply(
+                                        reSTFTin[i][t][f], imSTFTin[i][t][f],
+                                        reSTFTin[j][t][f], -imSTFTin[j][t][f])[1]
+                                        * G_r[s][t];
+                                ;
+                            }
+                            reV[s][f][i][j] = reV[s][f][i][j] / (double) nFrames;
+                            imV[s][f][i][j] = imV[s][f][i][j] / (double) nFrames;
+                        }
+                    }
+                }
+            }
+
+            //updating the demixing matrix
+            for (int s = 0; s < nSrc; s++) {
+                double[][][] reWV = new double[nFreq][nSrc][nChannels];
+                double[][][] imWV = new double[nFreq][nSrc][nChannels];
+                for (int f = 0; f < nFreq; f++) {
+                    for (int i = 0; i < nSrc; i++) {
+                        for (int j = 0; j < nChannels; j++) {
+                            for (int k = 0; k < nChannels; k++) {
+                                reWV[f][i][j] += complexMultiply(
+                                        reW[i][k][f], -imW[i][k][f],
+                                        reV[s][f][k][j], imV[s][f][k][j])[0];
+                                imWV[f][i][j] += complexMultiply(
+                                        reW[i][k][f], -imW[i][k][f],
+                                        reV[s][f][k][j], imV[s][f][k][j])[1];
+                            }
+                        }
+                    }
+
+
+
+                    if (nSrc == 2) {
+                        double[][][] invWV = new double[nChannels][nSrc][2];
+                        invWV = complex2Dinv(reWV[f], imWV[f]);
+                    }
+                }
+
+                //inverting WV
+
+            }
+
+            if (isProjBack) {
+                //project back
+            }
+
         }
     }
+
+    private double[][][] complex2Dinv(double[][] real, double[][] imag) {
+        double reDet, imDet;
+
+        double[][][] out = new double[real.length][real.length][2];
+
+        reDet = real[0][0] * real[0][0] - real[0][1] * real[1][0];
+        imDet = imag[0][0] * imag[0][0] - imag[0][1] * imag[1][0];
+
+        double[] invDet;
+
+        invDet = complexReciprocal(reDet, imDet);
+
+        out[0][0][0] = real[1][1];
+        out[0][1][0] = -real[1][0];
+        out[1][0][0] = -real[0][1];
+        out[1][1][0] = real[0][0];
+
+        out[0][0][1] = imag[1][1];
+        out[0][1][1] = -imag[1][0];
+        out[1][0][1] = -imag[0][1];
+        out[1][1][1] = imag[0][0];
+
+        for (int i = 0; i < real.length; i++) {
+            for (int j = 0; j < real.length; j++) {
+                out[i][j] = complexMultiply(out[i][j][0], out[i][j][1],
+                        invDet[0], invDet[1]);
+            }
+        }
+
+        return out;
+    }
+
+    private double[] complexReciprocal(double real, double imag) {
+        double[] out = new double[2];
+
+        double mod = pow(real, 2.0) + pow(imag, 2.0);
+
+        out[0] = real / mod;
+        out[1] = -imag / mod;
+
+        return out;
+    }
+
+        /*
+    private double[][] matrix2DMultiply(double[][] A, double[][] B) {
+        int inner;
+        if (A[0].length != B.length) {
+            throw new RuntimeException("Invalid dimensions");
+        } else {
+            inner = A[0].length
+        }
+
+        int outRow = A.length;
+        int outCol = B[0].length;
+        double[][] out = new double[outRow][outCol];
+
+        for (int i = 0; i < outRow; i++) {
+            for (int j = 0; j < outCol; j++) {
+                for (int k = 0; k < inner; k++){
+                    out[i][j] += A[i][k] * B[k][j];
+                }
+            }
+        }
+        return out;
+    }
+    */
 
     private double[] complexMultiply(double reA, double imA, double reB, double imB) {
         double[] out = new double[2];
@@ -199,27 +330,4 @@ public class AuxIVA {
     }
 
 
-    /*
-    private double[][] matrix2DMultiply(double[][] A, double[][] B) {
-        int inner;
-        if (A[0].length != B.length) {
-            throw new RuntimeException("Invalid dimensions");
-        } else {
-            inner = A[0].length
-        }
-
-        int outRow = A.length;
-        int outCol = B[0].length;
-        double[][] out = new double[outRow][outCol];
-
-        for (int i = 0; i < outRow; i++) {
-            for (int j = 0; j < outCol; j++) {
-                for (int k = 0; k < inner; k++){
-                    out[i][j] += A[i][k] * B[k][j];
-                }
-            }
-        }
-        return out;
-    }
-    */
 }

@@ -2,6 +2,7 @@
   <dictionary name="Administrator">
     <words>
       <w>demixing</w>
+      <w>stft</w>
     </words>
   </dictionary>
 </component>

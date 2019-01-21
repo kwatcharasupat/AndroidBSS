@@ -10,4 +10,5 @@
     <string name="play_right_channel">Play Right Channel</string>
     <string name="read_file">Read file</string>
     <string name="run_stft_test">Run STFT (Test)</string>
+    <string name="next_complex">Next (Complex)</string>
 </resources>

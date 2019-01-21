@@ -26,6 +26,11 @@
             android:label="@string/STFTActivity_name"
             android:parentActivityName=".MainActivity">
         </activity>
+
+        <activity android:name=".STFTActivityComplex"
+            android:label="@string/STFTActivity_name"
+            android:parentActivityName=".MainActivity">
+        </activity>
     </application>
 
 </manifest>
