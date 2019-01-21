@@ -251,14 +251,6 @@ public class MainActivity extends AppCompatActivity {
         Log.i("DEBUG","Playback ended");
     }
 
-    public void launchSTFTactivity(View view) {
-        Intent intent = new Intent(this, STFTActivity.class);
-
-        intent.putExtra(FILE_NAME, fileName);
-
-        startActivity(intent);
-    }
-
     public void launchSTFTcomplexActivity(View view) {
         Intent intent = new Intent(this, STFTActivity.class);
 

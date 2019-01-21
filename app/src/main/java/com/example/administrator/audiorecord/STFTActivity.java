@@ -16,7 +16,6 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.Arrays;
 
 import static android.os.Environment.getExternalStorageDirectory;
 import static java.lang.Math.abs;
@@ -31,10 +30,9 @@ public class STFTActivity extends AppCompatActivity {
     File file;
     short[] shortData;
     double[][] audioData;
-    double[][][] reSTFT, imSTFT;
+    Complex[][][] STFToutput;
     double[][] reSig;
 
-    //double[][] fakeData;
     int testLen;
 
     TextView textView;
@@ -50,7 +48,7 @@ public class STFTActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_stft);
+        setContentView(R.layout.activity_stftcomplex);
 
         Intent intent = getIntent();
 
@@ -149,7 +147,7 @@ public class STFTActivity extends AppCompatActivity {
         for (int j = 0; j < NUM_CHANNELS; j++) {
             for (int i = 0; i < audioDataLength; i++) {
 
-                double value = shortData[NUM_CHANNELS * i + j] / 32768.0;
+                double value = shortData[NUM_CHANNELS * i + j] / 32768.0;   // Channels are interleaved
 
                 audioData[j][i] = value;
             }
@@ -167,32 +165,6 @@ public class STFTActivity extends AppCompatActivity {
         stftThread = new Thread(new STFTRunnable(), "STFT Thread");
     }
 
-    private void runFFTtest() {
-
-        STFT stft = new STFT();
-        testLen = 16;
-
-        double[] x = new double[testLen];
-        double[] y = new double[testLen];
-
-        Arrays.fill(x, 1);
-
-        stft.fft(x, y);
-
-        Log.i("DEBUG", "x_stft_re: " + Arrays.toString(x));
-        Log.i("DEBUG", "x_stft_im: " + Arrays.toString(y));
-
-        Arrays.fill(x, 1);
-        Arrays.fill(y, 0);
-
-        stft.ifft(x, y);
-
-        Log.i("DEBUG", "x_hat: " + Arrays.toString(x));
-        Log.i("DEBUG", "y_hat: " + Arrays.toString(y));
-
-
-    }
-
     private void runSTFTtest() {
 
         Log.i("DEBUG", "Running STFT Test");
@@ -204,33 +176,15 @@ public class STFTActivity extends AppCompatActivity {
 
         testLen = audioDataLength;
 
-        //fakeData = new double[NUM_CHANNELS][testLen];
-
-        //double freq = 440.0;
-
-        //Random rnd = new Random(100);
-
-        /*
-
-        for (int c = 0; c < NUM_CHANNELS; c++){
-            for(int i = 0; i < testLen; i++){
-                fakeData[c][i] = rnd.nextDouble();
-            }
-        }
-        */
-
         reSig = new double[NUM_CHANNELS][testLen];
 
         stft.stftm(audioData, winLen, nOverlap, winFunc);
 
-        reSTFT = new double[NUM_CHANNELS][stft.get_nFrames()][stft.get_nFreq()];
-        imSTFT = new double[NUM_CHANNELS][stft.get_nFrames()][stft.get_nFreq()];
+        STFToutput = new Complex[NUM_CHANNELS][stft.get_nFrames()][stft.get_nFreq()];
 
-        reSTFT = stft.getReSTFT();
-        imSTFT = stft.getImSTFT();
+        STFToutput = stft.getSTFT();
 
-        //stft.istftm(reSTFT, imSTFT, winLen, nOverlap, winFunc, testLen);
-        stft.istftm(reSTFT, imSTFT, winLen, nOverlap, winFunc, testLen);
+        stft.istftm(STFToutput, winLen, nOverlap, winFunc, testLen);
 
         reSig = stft.getRealSigFromInvSTFT();
 
@@ -258,33 +212,6 @@ public class STFTActivity extends AppCompatActivity {
 
         testSTFT();
         Log.i("DEBUG", "STFT Test completed");
-    }
-
-    private class STFTRunnable implements Runnable {
-
-        @Override
-        public void run() {
-
-            Log.i("DEBUG", "Running STFT");
-
-            STFT stft = new STFT();
-
-            int winLen = 2048, nOverlap = 1024;
-            String winFunc = "sine";
-
-            reSig = new double[NUM_CHANNELS][audioDataLength];
-
-            stft.stftm(audioData, winLen, nOverlap, winFunc);
-
-            reSTFT = new double[NUM_CHANNELS][stft.get_nFrames()][stft.get_nFreq()];
-            imSTFT = new double[NUM_CHANNELS][stft.get_nFrames()][stft.get_nFreq()];
-
-            reSTFT = stft.getReSTFT();
-            imSTFT = stft.getImSTFT();
-
-            Log.i("DEBUG", "STFT successfully ran");
-
-        }
     }
 
     private void testSTFT() {
@@ -318,6 +245,29 @@ public class STFTActivity extends AppCompatActivity {
         }
 
         //Log.i("DEBUGTest", "Off count = " + offcount);
+    }
+
+    private class STFTRunnable implements Runnable {
+
+        @Override
+        public void run() {
+
+            Log.i("DEBUG", "Running STFT");
+
+            STFT stft = new STFT();
+
+            int winLen = 2048, nOverlap = 1024;
+            String winFunc = "sine";
+
+            reSig = new double[NUM_CHANNELS][audioDataLength];
+
+            stft.stftm(audioData, winLen, nOverlap, winFunc);
+
+            STFToutput = new Complex[NUM_CHANNELS][stft.get_nFrames()][stft.get_nFreq()];
+            STFToutput = stft.getSTFT();
+
+            Log.i("DEBUG", "STFT successfully ran");
+        }
     }
 }
 
