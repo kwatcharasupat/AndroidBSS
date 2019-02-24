@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="utf-8"?>
+<android.support.constraint.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context=".activities_usermode.MainActivity_UserMode">
+
+    <Button
+        android:id="@+id/bNextToSTFT"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="24dp"
+        android:layout_marginEnd="22dp"
+        android:layout_marginBottom="16dp"
+        android:onClick="launchBssActivity"
+        android:text="@string/next"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent" />
+
+    <android.support.design.widget.FloatingActionButton
+        android:id="@+id/fabRecord"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:clickable="true"
+        app:backgroundTint="@color/colorPrimaryLight"
+        app:fabSize="auto"
+        app:layout_constraintBottom_toTopOf="@+id/fabPlay"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.5"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:rippleColor="@color/colorAccent"
+        app:srcCompat="@drawable/ic_round_mic_24px"
+        app:useCompatPadding="true" />
+
+    <android.support.design.widget.FloatingActionButton
+        android:id="@+id/fabPlay"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:clickable="true"
+        app:backgroundTint="@color/colorPrimaryLight"
+        app:layout_constraintBottom_toTopOf="@+id/bNextToSTFT"
+        app:layout_constraintEnd_toStartOf="@+id/fabStop"
+        app:layout_constraintHorizontal_bias="0.5"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/fabRecord"
+        app:rippleColor="@color/colorAccent"
+        app:srcCompat="@drawable/ic_round_play_arrow_24px" />
+
+    <android.support.design.widget.FloatingActionButton
+        android:id="@+id/fabSave"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:clickable="true"
+        app:backgroundTint="@color/colorPrimaryLight"
+        app:layout_constraintBottom_toBottomOf="@+id/fabStop"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.5"
+        app:layout_constraintStart_toEndOf="@+id/fabStop"
+        app:layout_constraintTop_toTopOf="@+id/fabStop"
+        app:layout_constraintVertical_bias="0.0"
+        app:rippleColor="@color/colorAccent"
+        app:srcCompat="@drawable/ic_round_save_24px" />
+
+    <android.support.design.widget.FloatingActionButton
+        android:id="@+id/fabStop"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:clickable="true"
+        app:backgroundTint="@color/colorPrimaryLight"
+        app:layout_constraintBottom_toBottomOf="@+id/fabPlay"
+        app:layout_constraintEnd_toStartOf="@+id/fabSave"
+        app:layout_constraintHorizontal_bias="0.5"
+        app:layout_constraintStart_toEndOf="@+id/fabPlay"
+        app:layout_constraintTop_toTopOf="@+id/fabPlay"
+        app:layout_constraintVertical_bias="0.0"
+        app:rippleColor="@color/colorAccent"
+        app:srcCompat="@drawable/ic_round_stop_24px" />
+
+    <Switch
+        android:id="@+id/switchTestMode"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginEnd="24dp"
+        android:layout_marginBottom="8dp"
+        android:text="Test Mode "
+        app:layout_constraintBottom_toTopOf="@+id/bNextToSTFT"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+
+</android.support.constraint.ConstraintLayout>
+

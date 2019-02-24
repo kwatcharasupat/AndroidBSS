@@ -1,9 +1,11 @@
-package com.example.administrator.audiorecord;
+package com.example.administrator.audiorecord.audioprocessing.commons;
 
 import android.util.Log;
 
 import org.apache.commons.math3.complex.Complex;
 import org.apache.commons.math3.transform.FastFourierTransformer;
+
+import java.util.stream.IntStream;
 
 import static java.lang.Math.PI;
 import static java.lang.Math.ceil;
@@ -14,29 +16,29 @@ import static org.apache.commons.math3.transform.DftNormalization.STANDARD;
 import static org.apache.commons.math3.transform.TransformType.FORWARD;
 import static org.apache.commons.math3.transform.TransformType.INVERSE;
 
-class STFT {
+public class STFT {
 
     /*
     Multichannel Short Time Fourier Transform and Inverse Short Time Fourier Transform for Java
     2018 (c) Karn Watcharasupat, GNU Public License v3.0
      */
 
-    private int winLen, hopSize, nOverlap, nFrames;
-    private int nSamples, nChannels, nFreq;
-    private int paddedLength;
+    private int nFrames;
+    private int nFreqs;
 
-    private double[] window;
+    private int inv_nFrames;
+    private int inv_nFreqs;
+
     private double[] iswin;
 
-    private double[][] input;
     private Complex[][][] output;
 
     private double[][] invOutput;
 
-    STFT() {
+    public STFT() {
     }
 
-    void stftm(double[][] input, int winLen, int nOverlap, String winFunc) {
+    public void stftm(double[][] input, int winLen, int nOverlap, String winFunc) {
 
         /*
         Multichannel Short Time Fourier Transform
@@ -53,46 +55,43 @@ class STFT {
             The window function
         Output
         ------
-        output: Complex[][][] (nChannels by nFrames by nFreq)
+        output: Complex[][][] (nChannels by nFrames by nFreqs)
             The STFT representation of input signal
             call getSTFT() to obtain the matrix
          */
 
         Log.i("DEBUG", "STFT running");
 
-        this.input = input;
+        int nChannels = input.length;
+        int nSamples = input[0].length;
 
-        this.nChannels = input.length;
-        this.nSamples = input[0].length;  // time is in the second dimension
+        int hopSize = winLen - nOverlap;
 
-        this.winLen = winLen;
-        this.nOverlap = nOverlap;
-        this.hopSize = winLen - nOverlap;
-
-        this.nFrames = (int) ceil(nSamples / nOverlap) + (int) ceil(nOverlap / hopSize);
-        this.paddedLength = nFrames * hopSize + 2 * nOverlap;
+        this.nFrames = (int) ceil((double) nSamples / nOverlap) + (int) ceil((double) nOverlap / hopSize);
+        int paddedLength = nFrames * hopSize + 2 * nOverlap;
 
         double[][] paddedInput = new double[nChannels][paddedLength];
 
-        this.nFreq = winLen / 2 + 1;
+        this.nFreqs = winLen / 2 + 1;
 
-        this.output = new Complex[nChannels][nFrames][this.nFreq];
+        this.output = new Complex[nChannels][nFrames][this.nFreqs];
 
         // padding
         for (int c = 0; c < nChannels; c++) {
-            System.arraycopy(this.input[c], 0, paddedInput[c], nOverlap, nSamples);
+            System.arraycopy(input[c], 0, paddedInput[c], nOverlap, nSamples);
         }
 
-        this.window = new double[winLen];
-        getSTFTwindow(winFunc);
+        double[] window = new double[winLen];
+        getSTFTwindow(winFunc, window, winLen);
 
-        setScalingVec(true);    // true for forward fft
+        setScalingVec(true, paddedLength, winLen, hopSize, nFrames, window);    // true for forward fft
         for (int c = 0; c < nChannels; c++) {
-            for (int t = 0; t < nFrames; t++) {
+            int finalC = c;
+            IntStream.range(0, nFrames).parallel().forEach(t -> {
                 double[] frame = new double[winLen];
                 double[] wFrame = new double[winLen];
 
-                System.arraycopy(paddedInput[c], t * hopSize, frame, 0, winLen);
+                System.arraycopy(paddedInput[finalC], t * hopSize, frame, 0, winLen);
 
                 for (int j = 0; j < winLen; j++) {
                     wFrame[j] = frame[j] * window[j] * iswin[t * hopSize + j];
@@ -100,19 +99,19 @@ class STFT {
 
                 FastFourierTransformer FFT = new FastFourierTransformer(STANDARD);
 
-                output[c][t] = FFT.transform(wFrame, FORWARD);
-            }
+                System.arraycopy(FFT.transform(wFrame, FORWARD), 0, output[finalC][t], 0, nFreqs);
+            });
         }
         Log.i("DEBUG", "STFT completed");
     }
 
-    void istftm(Complex[][][] STFT, int winLen, int nOverlap, String winFunc, int nSamples) {
+    public void istftm(Complex[][][] STFT, int winLen, int nOverlap, String winFunc, int nSamples) {
         /*
         Multichannel Inverse Short Time Fourier Transform
 
         Parameters
         ----------
-        input: Complex[][][] (nChannels by nSamples by nFreq)
+        input: Complex[][][] (nChannels by nSamples by nFreqs)
             The processed complex STFT data
         winLen: int
             The window length
@@ -130,37 +129,31 @@ class STFT {
 
         Log.i("DEBUG", "Inverse STFT running");
 
-        this.nChannels = STFT.length;
+        int inv_nChannels = STFT.length;
         int inv_nFrames = STFT[0].length;
 
-        this.winLen = winLen;
-        this.nOverlap = nOverlap;
-        this.hopSize = winLen - nOverlap;
+        int inv_hopSize = winLen - nOverlap;
 
-        this.nSamples = nSamples;  // time is in the second dimension
+        int inv_paddedLength = inv_nFrames * inv_hopSize + 2 * nOverlap;
 
-        this.paddedLength = inv_nFrames * hopSize + 2 * nOverlap;
-
-        this.window = new double[winLen];
-        double[][] invPaddedOutput = new double[nChannels][paddedLength];
+        double[] inv_window = new double[winLen];
+        double[][] invPaddedOutput = new double[inv_nChannels][inv_paddedLength];
 
         int nFreq = winLen / 2 + 1;
 
-        this.input = new double[nChannels][nSamples];
+        getSTFTwindow(winFunc, inv_window, winLen);
 
-        getSTFTwindow(winFunc);
+        setScalingVec(false, inv_paddedLength, winLen, inv_hopSize, inv_nFrames, inv_window);   // false for inverse fft
 
-        setScalingVec(false);   // false for inverse fft
-
-        this.invOutput = new double[nChannels][nSamples];
-
-        for (int c = 0; c < nChannels; c++) {
-            for (int i = 0; i < inv_nFrames; i++) {
+        this.invOutput = new double[inv_nChannels][nSamples];
+        for (int c = 0; c < inv_nChannels; c++) {
+            int finalC = c;
+            IntStream.range(0, inv_nFrames).parallel().forEach(i -> {
                 Complex[] inputFrame = new Complex[winLen];
-                System.arraycopy(STFT[c][i], 0, inputFrame, 0, nFreq);
+                System.arraycopy(STFT[finalC][i], 0, inputFrame, 0, nFreq);
 
                 for (int j = 0; j < winLen / 2 - 1; j++) {
-                    inputFrame[nFreq + j] = STFT[c][i][nFreq - 2 - j].conjugate();
+                    inputFrame[nFreq + j] = STFT[finalC][i][nFreq - 2 - j].conjugate();
                 }
 
                 FastFourierTransformer FFT = new FastFourierTransformer(STANDARD);
@@ -176,30 +169,33 @@ class STFT {
                 double[] wFrame = new double[winLen];
 
                 for (int j = 0; j < winLen; j++) {
-                    wFrame[j] = window[j] * fframe[j] * iswin[i * hopSize + j];
-                    invPaddedOutput[c][i * hopSize + j] = invPaddedOutput[c][i * hopSize + j] + wFrame[j];
+                    wFrame[j] = inv_window[j] * fframe[j] * iswin[i * inv_hopSize + j];
+                    invPaddedOutput[finalC][i * inv_hopSize + j] = invPaddedOutput[finalC][i * inv_hopSize + j] + wFrame[j];
                 }
-            }
-
-            System.arraycopy(invPaddedOutput[c], nOverlap, this.invOutput[c], 0, nSamples);
-
-            Log.i("DEBUG", "Inverse STFT completed");
+            });
         }
+
+        for (int c = 0; c < inv_nChannels; c++) {
+            System.arraycopy(invPaddedOutput[c], nOverlap, this.invOutput[c], 0, nSamples);
+        }
+
+        Log.i("DEBUG", "Inverse STFT completed");
     }
 
-    private void setScalingVec(boolean isFwd) {
+    private void setScalingVec(boolean isFwd, int paddedLength, int winLen, int hopSize,
+                               int nFrames, double[] window) {
 
         final double EPSILON = 1e-8;
         double[] swin = new double[paddedLength];
         iswin = new double[paddedLength];
 
-        for (int i = 0; i < nFrames; i++) {
+        IntStream.range(0, nFrames).parallel().forEach(i -> {
             for (int j = 0; j < winLen; j++) {
                 swin[i * hopSize + j] = swin[i * hopSize + j] + window[j] * window[j];
             }
-        }
+        });
 
-        for (int i = 0; i < paddedLength; i++) {
+        IntStream.range(0, paddedLength).parallel().forEach(i -> {
             if (swin[i] == 0) {
                 swin[i] = EPSILON;
             } else {
@@ -210,10 +206,10 @@ class STFT {
                 }
             }
             iswin[i] = 1.0 / swin[i];
-        }
+        });
     }
 
-    private void getSTFTwindow(String winFunc) {
+    private void getSTFTwindow(String winFunc, double[] window, int winLen) {
         switch (winFunc) {
             case "sine":
                 // sine window
@@ -230,19 +226,19 @@ class STFT {
         }
     }
 
-    Complex[][][] getSTFT() {
+    public Complex[][][] getSTFT() {
         return output;
     }
 
-    double[][] getRealSigFromInvSTFT() {
+    public double[][] getRealSigFromInvSTFT() {
         return this.invOutput;
     }
 
-    int get_nFrames() {
+    public int get_nFrames() {
         return nFrames;
     }
 
-    int get_nFreq() {
-        return nFreq;
+    public int get_nFreqs() {
+        return nFreqs;
     }
 }

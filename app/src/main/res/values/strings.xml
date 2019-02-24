@@ -1,14 +1,35 @@
 <resources>
     <string name="app_name">AudioRecord</string>
-    <string name="stop_recording">Stop Recording</string>
+    <string name="stop">Stop</string>
     <string name="start_recording">Start Recording</string>
-    <string name="play_recorded_audio">Play Recorded Audio</string>
+    <string name="play_recorded_audio">Play Audio</string>
     <string name="next">Next</string>
     <string name="textview">(put file name here)</string>
     <string name="STFTActivity_name">STFT Options</string>
     <string name="play_left_channel">Play Left Channel</string>
     <string name="play_right_channel">Play Right Channel</string>
-    <string name="read_file">Read file</string>
+    <string name="read_file">Read file and run STFT</string>
     <string name="run_stft_test">Run STFT (Test)</string>
     <string name="next_complex">Next (Complex)</string>
+    <string name="save_pcm_to_wav">Save the audio file</string>
+    <string name="BSSMenuActivity_name">BSS Menu Activity</string>
+    <string name="choose_a_bss_algorithm">Choose a BSS algorithm</string>
+    <string name="save_channel_1">Save Channel 1</string>
+    <string name="save_channel_2">Save Channel 2</string>
+    <string name="save_reconstructed_signal">Save reconstructed signal</string>
+    <string name="next_test_audio">Next (test audio)</string>
+    <string name="this_is_auxiva">This is AuxIVA</string>
+    <string name="run_auxiva">Run AuxIVA</string>
+    <string name="reconstruct_signal">reconstruct signal</string>
+
+    <string-array name="bss_options">
+        <item>AuxIVA - Parallel</item>
+        <item>SCA</item>
+    </string-array>
+    <string name="title_activity_main">MainActivity</string>
+    <string name="choose_the_source_to_listen_to">Choose the source to listen to</string>
+    <string name="stft_test_mode">STFT Test Mode</string>
+    <string name="press_to_transcribe">Press the button to start transcribing</string>
+    <string name="transcription_in_progress">Transcription in progress...</string>
+    <string name="no_internet">No internet connection detect. Connect to the internet and try again.</string>
 </resources>

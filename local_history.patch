@@ -1,0 +1,608 @@
+Index: app/src/main/java/com/example/administrator/audiorecord/audioprocessing/bss/AuxIVA.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+--- app/src/main/java/com/example/administrator/audiorecord/audioprocessing/bss/AuxIVA.java	(date 1548433203209)
++++ app/src/main/java/com/example/administrator/audiorecord/audioprocessing/bss/AuxIVA.java	(date 1548433203209)
+@@ -3,27 +3,25 @@
+ import android.util.Log;
+ 
+ import org.apache.commons.math3.complex.Complex;
++import org.apache.commons.math3.complex.ComplexField;
+ import org.apache.commons.math3.linear.Array2DRowFieldMatrix;
+ import org.apache.commons.math3.linear.FieldLUDecomposition;
+ import org.apache.commons.math3.linear.FieldMatrix;
+ 
+ import java.util.Arrays;
+ 
+-import static java.lang.Math.cosh;
+-import static java.lang.Math.log;
+ import static java.lang.Math.pow;
+ import static java.lang.Math.sqrt;
+-import static java.lang.Math.tanh;
+ 
+ public class AuxIVA {
+ 
+     private double EPSILON = 1e-15;
+ 
+     private Complex[][][] STFTin, STFTout;
+-    private Complex[][][] W;
++    //private Complex[][][] W;
+     private double[][] r, G_r;
+-    private Complex[][][][] V;
+-    private Complex[][] Identity;
++    //private Complex[][][][] V;
++    //private Complex[][] Identity;
+ 
+     private int nSrc, nItr;
+     private int nChannels, nFrames, nFreqs;
+@@ -31,6 +29,13 @@
+     private String cFunc;
+     private double[] cFuncParam;
+ 
++    private Array2DRowFieldMatrix<Complex>[][] V; // freq by src by (chan x chan)
++    private Array2DRowFieldMatrix<Complex>[] W; // freq by (chan by src)
++    private Array2DRowFieldMatrix<Complex>[][] X; // frame by freq by (chan x 1)
++    private Array2DRowFieldMatrix<Complex>[][] Y; // frame by freq by (chan x 1)
++
++    private Array2DRowFieldMatrix Identity;
++
+     public AuxIVA(Complex[][][] STFTin,
+                   int nItr, boolean isProjBack,
+                   Complex[][][] W0,
+@@ -54,7 +59,7 @@
+         isProjBack: boolean
+             scaling on the first microphone by back projection
+ 
+-        W0: Complex[][][] (nFreqs by nSrc by nChannels)
++        W0: Complex[][][] (nFreqs by nChannels by nSrc )
+             initial mixing matrix, optional
+ 
+         cFunc:  String
+@@ -98,28 +103,44 @@
+             }
+         }
+ 
++        X = new Array2DRowFieldMatrix[nFrames][nFreqs];
++        Y = new Array2DRowFieldMatrix[nFrames][nFreqs];
++        for (int t = 0; t < this.nFrames; t++) {
++            for (int f = 0; f < this.nFreqs; f++) {
++                Complex[] temp = new Complex[nChannels];
++                for (int c = 0; c < this.nChannels; c++) {
++                    temp[c] = STFTin[c][t][f];
++                }
++                X[t][f] = new Array2DRowFieldMatrix<>(temp);
++                Y[t][f] = new Array2DRowFieldMatrix<>(temp);
++            }
++        }
++
++        Array2DRowFieldMatrix<Complex> Identity = new Array2DRowFieldMatrix<>(ComplexField.getInstance());
++        for (int c = 0; c < nChannels; c++) {
++            for (int s = 0; s < nSrc; s++) {
++                if (s == c) {
++                    Identity.setEntry(c, s, Complex.ONE);
++                } else {
++                    Identity.setEntry(c, s, Complex.ZERO);
++                }
++            }
++        }
++
+         // initializing the demixing matrix
+         Log.i("DEBUG", "Initializing demixing matrix");
+         if (W0 == null) {
+             Log.i("DEBUG", "Initializing with identity");
+-            this.W = new Complex[this.nFreqs][this.nSrc][this.nChannels];
+ 
+             for (int f = 0; f < this.nFreqs; f++) {
+-                for (int s = 0; s < this.nSrc; s++) {
+-                    for (int c = 0; c < this.nChannels; c++) {
+-                        if (s == c) {
+-                            this.W[f][s][c] = Complex.ONE;
+-                        } else {
+-                            this.W[f][s][c] = Complex.ZERO;
+-                        }
+-                    }
+-                    Log.i("DEBUG", "W[" + f + "][" + s + "] = " + Arrays.toString(W[f][s]));
+-                }
++                W[f] = (Array2DRowFieldMatrix<Complex>) Identity.copy();
+             }
+             Log.i("DEBUG", "Initializing with identity - done");
+         } else {
+             Log.i("DEBUG", "Initializing with specified value");
+-            this.W = W0;
++            for (int f = 0; f < nFreqs; f++) {
++                W[f] = new Array2DRowFieldMatrix<>(W0[f]);
++            }
+         }
+ 
+         // initializing the separated source matrix
+@@ -130,21 +151,8 @@
+         this.cFuncParam = new double[cFuncParam.length];
+         System.arraycopy(cFuncParam, 0, this.cFuncParam, 0, cFuncParam.length);
+ 
+-        this.r = new double[this.nSrc][this.nFrames];
+-        this.G_r = new double[this.nSrc][this.nFrames];
+-        this.V = new Complex[this.nSrc][this.nFreqs][this.nChannels][this.nChannels];
+-
+-        this.Identity = new Complex[this.nSrc][this.nChannels];
+-
+-        for (int s = 0; s < this.nSrc; s++) {
+-            for (int c = 0; c < this.nChannels; c++) {
+-                if (s == c) {
+-                    this.Identity[s][c] = Complex.ONE;
+-                } else {
+-                    this.Identity[s][c] = Complex.ZERO;
+-                }
+-            }
+-        }
++        this.r = new double[this.nFrames][this.nSrc];
++        this.G_r = new double[this.nFrames][this.nSrc];
+     }
+ 
+ 
+@@ -159,7 +167,7 @@
+             }
+         }
+         */
+-        demix(STFTout, STFTin, W);
++        demix(Y, X, W);
+         Log.i("DEBUG", "DEMIXING MATRIX: " + Arrays.deepToString(W));
+         for (int s = 0; s < nSrc; s++) {
+             for (int t = 0; t < nFrames; t++) {
+@@ -175,7 +183,7 @@
+             Log.i("DEBUG", "Iteration: " + runCount);
+             Log.i("DEBUG", "DEMIXING MATRIX: " + Arrays.deepToString(W));
+             // demixing
+-            demix(STFTout, STFTin, W);
++            demix(Y, X, W);
+ 
+             Log.i("DEBUG", "Calculating r and G/r");
+             // calculate r and G/r
+@@ -188,14 +196,14 @@
+                     for (int f = 0; f < nFreqs; f++) {
+                         sum += pow(STFTout[s][t][f].abs(), 2.0);
+                     }
+-                    r[s][t] = sqrt(sum);    // nSrc by nFrames
++                    r[t][s] = sqrt(sum);    // nSrc by nFrames
+                     Log.i("DEBUG", "r is zero!");
+-                    if (r[s][t] == 0) {
++                    if (r[t][s] == 0) {
+                         Log.i("DEBUG", "r is zero!");
+-                        r[s][t] = EPSILON;
++                        r[t][s] = EPSILON;
+                     }
+                     //Log.i("DEBUG", "r[s][t] = " + r[s][t]);
+-                    G_r[s][t] = cFuncCalc(cFunc, "df", r[s][t]) / r[s][t]; // nSrc by nFrames
++                    G_r[t][s] = cFuncCalc(cFunc, "df", r[t][s]) / r[t][s]; // nSrc by nFrames
+                     //Log.i("DEBUG", "G_r[s][t] = " + G_r[s][t]);
+                 }
+             }
+@@ -208,227 +216,246 @@
+                 for (int f = 0; f < nFreqs; f++) {
+                     //Log.i("DEBUG", "bin = " + f);
+                     //Complex[][] cov = new Complex[nChannels][nChannels];
+-                    for (int i = 0; i < nChannels; i++) {
+-                        //Log.i("DEBUG", "i = " + i);
+-                        for (int j = 0; j < nChannels; j++) {
+-                            //Log.i("DEBUG", "j = " + j);
+-                            V[s][f][i][j] = Complex.ZERO;
+-                            // V = avg over frames(G_r * x * x^h)
+-                            // x * x^h = [x1; x2]*[x1' x2'] = [x1*x1' x1*x2'; x2x1' x2x2']
+-                            // (x * x^h)_ij = x_i * x_j'
+-                            for (int t = 0; t < nFrames; t++) {
+-                                V[s][f][i][j]
+-                                        = V[s][f][i][j]
+-                                        .add(STFTin[i][t][f]
+-                                                .multiply(STFTin[j][t][f].conjugate())
+-                                                .multiply(G_r[s][t]));
+-                            }
+-                            Log.i("DEBUG", "V[" + s + "][" + f + "][" + i + "][" + j + "] = " + V[s][f][i][j]);
+-                            V[s][f][i][j] = V[s][f][i][j].divide((double) nFrames);
+-                            Log.i("DEBUG", "V[" + s + "][" + f + "][" + i + "][" + j + "] = " + V[s][f][i][j]);
+-                        }
+-                    }
+-                    //Log.i("DEBUG", "V[s][f] = " + Arrays.deepToString(V[s][f]));
+-                }
+-            }
++
++                    //Log.i("DEBUG", "j = " + j);
++                    V[f][s] = new Array2DRowFieldMatrix<>(ComplexField.getInstance());
++
++                    for (int t = 0; t < nFrames; t++) {
++
++                        Array2DRowFieldMatrix<Complex> Xconj = (Array2DRowFieldMatrix<Complex>) X[t][f].copy();
++                        for (int c = 0; c < nChannels; c++) {
++                            Xconj.setEntry(c, 0, X[t][f].getEntry(c, 0).conjugate());
++                        }
++
++                        X[t][f].transpose().multiply(Xconj);
++                    }
++
++
++                    // V = avg over frames(G_r * x * x^h)
++                    // x * x^h = [x1; x2]*[x1' x2'] = [x1*x1' x1*x2'; x2x1' x2x2']
++                    // (x * x^h)_ij = x_i * x_j'
++                    for (int t = 0; t < nFrames; t++) {
++                        V[f][s][i][j]
++                                = V[f][s][i][j]
++                                .add(STFTin[i][t][f]
++                                        .multiply(STFTin[j][t][f].conjugate())
++                                        .multiply(G_r[t][s]));
++                    }
++                    Log.i("DEBUG", "V[" + f + "][" + s + "][" + i + "][" + j + "] = " + V[f][s][i][j]);
++                    V[f][s][i][j] = V[f][s][i][j].divide((double) nFrames);
++                    Log.i("DEBUG", "V[" + f + "][" + s + "][" + i + "][" + j + "] = " + V[f][s][i][j]);
++                }
++            }
++            //Log.i("DEBUG", "V[s][f] = " + Arrays.deepToString(V[s][f]));
++        }
++    }
+ 
+-            //Log.i("DEBUG", "Calculating V - done");
++    //Log.i("DEBUG", "Calculating V - done");
+ 
+-            Log.i("DEBUG", "Updating demixing matrix");
+-            //updating the demixing matrix
+-            for (int s = 0; s < nSrc; s++) {
+-                //Log.i("DEBUG", "src = " + s);
+-                Complex[][][] WV = new Complex[nFreqs][nSrc][nChannels];
+-                for (int f = 0; f < nFreqs; f++) {
+-                    //Log.i("DEBUG", "bin = " + f);
+-                    //Log.i("DEBUG", "matrix multiplication");
+-                    for (int i = 0; i < nSrc; i++) {
+-                        for (int j = 0; j < nChannels; j++) {
+-                            WV[f][i][j] = Complex.ZERO;
+-                            for (int k = 0; k < nChannels; k++) {
+-                                WV[f][i][j] = WV[f][i][j].add(W[f][k][i].conjugate().multiply(V[s][f][k][j]));
+-                            }
+-                        }
+-                    }
+-                    Log.i("DEBUG", "WV[f] = " + Arrays.deepToString(WV[f]));
+-                    //Log.i("DEBUG", "matrix multiplication - done");
++            Log.i("DEBUG","Updating demixing matrix");
++    //updating the demixing matrix
++            for(
++    int s = 0;
++    s<nSrc;s++)
++
++    {
++        //Log.i("DEBUG", "src = " + s);
++        Complex[][][] WV = new Complex[nFreqs][nSrc][nChannels];
++        for (int f = 0; f < nFreqs; f++) {
++            //Log.i("DEBUG", "bin = " + f);
++            //Log.i("DEBUG", "matrix multiplication");
++            for (int i = 0; i < nSrc; i++) {
++                for (int j = 0; j < nChannels; j++) {
++                    WV[f][i][j] = Complex.ZERO;
++                    for (int k = 0; k < nChannels; k++) {
++                        WV[f][i][j] = WV[f][i][j].add(W[f][k][i].conjugate().multiply(V[f][s][k][j]));
++                    }
++                }
++            }
++            Log.i("DEBUG", "WV[f] = " + Arrays.deepToString(WV[f]));
++            //Log.i("DEBUG", "matrix multiplication - done");
+ 
+-                    //Log.i("DEBUG", "creating field matrix from array");
+-                    Array2DRowFieldMatrix<Complex> WVmat = new Array2DRowFieldMatrix<>(WV[f]);
+-                    Array2DRowFieldMatrix<Complex> IdentityMat = new Array2DRowFieldMatrix<>(this.Identity);
+-                    Log.i("DEBUG", "Identity" + IdentityMat.toString());;
++            //Log.i("DEBUG", "creating field matrix from array");
++            Array2DRowFieldMatrix<Complex> WVmat = new Array2DRowFieldMatrix<>(WV[f]);
++            Array2DRowFieldMatrix<Complex> IdentityMat = new Array2DRowFieldMatrix<Complex>(this.Identity);
++            Log.i("DEBUG", "Identity" + IdentityMat.toString());
++            ;
+ 
+-                    //Log.i("DEBUG", "finding matrix inverse");
+-                    boolean isNonSingular = new FieldLUDecomposition<>(WVmat).getSolver().isNonSingular();
+-                    FieldMatrix<Complex> WVinv = null;
+-                    if (isNonSingular) {
+-                        WVinv = new FieldLUDecomposition<>(WVmat).getSolver().solve(IdentityMat.getColumnMatrix(s));
++            //Log.i("DEBUG", "finding matrix inverse");
++            boolean isNonSingular = new FieldLUDecomposition<>(WVmat).getSolver().isNonSingular();
++            FieldMatrix<Complex> WVinv = null;
++            if (isNonSingular) {
++                WVinv = new FieldLUDecomposition<>(WVmat).getSolver().solve(IdentityMat.getColumnMatrix(s));
+ 
+-                        //Log.i("DEBUG", "getting matrix inverse");
+-                        W[f][s] = WVinv.transpose().getData()[0];
+-                        //Log.i("DEBUG", "matrix inversion - done");
++                //Log.i("DEBUG", "getting matrix inverse");
++                for (int c = 0; c < nChannels; c++) {
++                    W[f][c][s] = WVinv.transpose().getData()[0][c];
++                }
++
++                //Log.i("DEBUG", "matrix inversion - done");
+ 
+-                        Complex[] Vw = new Complex[nChannels];
++                Complex[] Vw = new Complex[nChannels];
+ 
+-                        for (int i = 0; i < nChannels; i++) {
+-                            Vw[i] = Complex.ZERO;
+-                            for (int k = 0; k < nChannels; k++) {
+-                                Vw[i] = Vw[i].add(V[s][f][i][k].multiply(W[f][s][k]));
+-                            }
+-                        }
++                for (int i = 0; i < nChannels; i++) {
++                    Vw[i] = Complex.ZERO;
++                    for (int j = 0; j < nChannels; j++) {
++                        Vw[i] = Vw[i].add(V[f][s][i][j].multiply(W[f][j][s]));
++                    }
++                }
+ 
+-                        Complex norm = Complex.ZERO;
+-                        for (int k = 0; k < nChannels; k++) {
+-                            norm = norm.add((W[f][s][k].conjugate()).multiply(Vw[k]));
+-                        }
++                Complex norm = Complex.ZERO;
++                for (int i = 0; i < nChannels; i++) {
++                    norm = norm.add((W[f][i][s].conjugate()).multiply(Vw[i]));
++                }
+ 
+-                        norm = norm.sqrt();
++                norm = norm.sqrt();
+ 
+-                        for (int i = 0; i < nChannels; i++) {
+-                            W[f][s][i] = W[f][s][i].divide(norm);
+-                        }
++                for (int i = 0; i < nChannels; i++) {
++                    W[f][i][s] = W[f][i][s].divide(norm);
++                }
+ 
+ 
+-                    } else {
+-                        Log.i("DEBUG", "WV is singular.");
+-                        break;
+-                    }
+-                }
+-            }
+-            Log.i("DEBUG", "Updating demixing matrix - done");
+-        }
++            } else {
++                Log.i("DEBUG", "WV is singular.");
++                break;
++            }
++        }
++    }
++            Log.i("DEBUG","Updating demixing matrix - done");
++}
+ 
+-        demix(STFTout, STFTin, W);
+-        Log.i("DEBUG", "STFTout = " + Arrays.deepToString(STFTout));
++    demix(STFTout, STFTin, W);
++        Log.i("DEBUG","STFTout = "+Arrays.deepToString(STFTout));
+ 
+-        if (isProjBack) {
+-            Log.i("DEBUG", "Projecting back");
+-            Complex[][] scale = projectBack(STFTout, STFTin[0]);
++                if(isProjBack){
++                Log.i("DEBUG","Projecting back");
++                Complex[][]scale=projectBack(STFTout,STFTin[0]);
+ 
+-            for (int s = 0; s < nSrc; s++) {
+-                for (int f = 0; f < nFreqs; f++) {
+-                    for (int t = 0; t < nFrames; t++) {
+-                        STFTout[s][t][f] = STFTout[s][t][f].multiply(scale[f][s].conjugate());
+-                    }
+-                }
+-            }
++                for(int s=0;s<nSrc; s++){
++        for(int f=0;f<nFreqs; f++){
++        for(int t=0;t<nFrames; t++){
++        STFTout[s][t][f]=STFTout[s][t][f].multiply(scale[f][s].conjugate());
++        }
++        }
++        }
+         }
+ 
+-        Log.i("DEBUG", "AuxIVA - done");
+-    }
++        Log.i("DEBUG","AuxIVA - done");
++        }
+ 
+-    public Complex[][][] getSourceEstimatesSTFT() {
++
++public Complex[][][]getSourceEstimatesSTFT(){
+         return STFTout;
+-    }
++        }
+ 
+ 
+-    private void demix(Complex[][][] Y, Complex[][][] X, Complex[][][] W) {
+-        Log.i("DEBUG", "Demixing");
++private void demix(Array2DRowFieldMatrix<Complex>[][]Y,Array2DRowFieldMatrix<Complex>[][]X,Array2DRowFieldMatrix<Complex>[]W){
++        Log.i("DEBUG","Demixing");
+ 
+-        // Y(f) = X(f) * W*(f)
+-        // Y: (nSrc by nFrames by nFreqs)
+-        // X: (nChannels by nFrames by nFreqs)
+-        // W: (nFreqs by nSrc by nChannels)
+-        //(frame by channel) * (channel by source)
++        Array2DRowFieldMatrix<Complex>[]Wconj=new Array2DRowFieldMatrix[W.length];
+ 
+-        for (int f = 0; f < nFreqs; f++) {
+-            //Log.i("DEBUG", "bin = " + f);
+-            for (int s = 0; s < this.nSrc; s++) {
+-                //Log.i("DEBUG", "src = " + s);
+-                for (int t = 0; t < this.nFrames; t++) {
+-                    //Log.i("DEBUG", "frm = " + j + "out of " + this.nFrames);
+-                    //Log.i("DEBUG", "initializing to zero");
+-                    Y[s][t][f] = Complex.ZERO;
+-                    //Log.i("DEBUG", "matrix multiplication");
+-                    for (int c = 0; c < this.nChannels; c++) {
+-                        Y[s][t][f] = Y[s][t][f].add(W[f][s][c].conjugate().multiply(X[c][t][f]));
+-                        //Log.i("DEBUG", "chn = " + c + "X = " + X[c][t][f] + "Y = " + Y[s][t][f]);
+-                    }
+-                }
+-            }
++        for(int t=0;t<nFrames; t++){
++        for(int f=0;f<nFreqs; f++){
++        for(int c=0;c<nChannels; c++){
++        for(int s=0;s<nSrc; s++){
++        Wconj[f].setEntry(c,s,W[f].getEntry(c,s).conjugate());
++        }
++        }
++        Y[t][f]=X[t][f].multiply(Wconj[f]);
++        }
++        }
++        //Log.i("DEBUG", "Y = " + Arrays.deepToString(Y));
++        OutMatrixToOutArray();
++        Log.i("DEBUG","Demixing - done");
++        }
++
++private void OutMatrixToOutArray(){
++        for(int t=0;t< this.nFrames;t++){
++        for(int f=0;f< this.nFreqs;f++){
++        for(int c=0;c< this.nChannels;c++){
++        STFTout[c][t][f]=Y[t][f].getData()[c][0];
++        }
++        }
++        }
+         }
+-        //Log.i("DEBUG", "Y = " + Arrays.deepToString(Y));
+-
+-        Log.i("DEBUG", "Demixing - done");
+-    }
+ 
+-    private double cFuncCalc(String func, String deriv, double r) {
++private double cFuncCalc(String func,String deriv,double r){
+ 
+-        double result = 0.0;
++        double result=0.0;
+ 
+-        double C, m = 0.0;
++        double C,m=0.0;
+ 
+-        C = cFuncParam[0];
+-        if (cFuncParam.length > 1) {
+-            m = cFuncParam[1];
++        C=cFuncParam[0];
++        if(cFuncParam.length>1){
++        m=cFuncParam[1];
+         }
+ 
+-        switch (func) {
+-            case "norm":
+-                switch (deriv) {
+-                    case "f":
+-                        result = (C * r);
+-                        break;
+-                    case "df":
+-                        result = C;
+-                        break;
+-                }
+-                break;
+-            case "cosh":
+-                switch (deriv) {
+-                    case "f":
+-                        result = (m * log(cosh(C * r)));
+-                        break;
+-                    case "df":
+-                        result = (C * m * tanh(C * r));
+-                        break;
+-                }
+-                break;
++        switch(func){
++        case"norm":
++        switch(deriv){
++        case"f":
++        result=(C*r);
++        break;
++        case"df":
++        result=C;
++        break;
++        }
++        break;
++        case"cosh":
++        switch(deriv){
++        case"f":
++        result=(m*log(cosh(C*r)));
++        break;
++        case"df":
++        result=(C*m*tanh(C*r));
++        break;
++        }
++        break;
+         }
+ 
+         return result;
+-    }
++        }
+ 
+-    private Complex[][] projectBack(Complex[][][] out, Complex[][] ref) {
+-        Log.i("DEBUG", "Calculating scale matrix");
+-        Complex[][] scale = new Complex[nFreqs][nSrc];
+-        Complex[][] num = new Complex[nFreqs][nSrc];
+-        double[][] denom = new double[nFreqs][nSrc];
++private Complex[][]projectBack(Complex[][][]out,Complex[][]ref){
++        Log.i("DEBUG","Calculating scale matrix");
++        Complex[][]scale=new Complex[nFreqs][nSrc];
++        Complex[][]num=new Complex[nFreqs][nSrc];
++        double[][]denom=new double[nFreqs][nSrc];
+ 
+-        Log.i("DEBUG", "out.length (src)= " + out.length);
+-        Log.i("DEBUG", "out.length[0] (frm)= " + out[0].length);
+-        Log.i("DEBUG", "out.length[0][0] (bin)= " + out[0][0].length);
++        Log.i("DEBUG","out.length (src)= "+out.length);
++        Log.i("DEBUG","out.length[0] (frm)= "+out[0].length);
++        Log.i("DEBUG","out.length[0][0] (bin)= "+out[0][0].length);
+ 
+-        Log.i("DEBUG", "ref.length (frm)= " + ref.length);
+-        Log.i("DEBUG", "ref.length[0] (bin)= " + ref[0].length);
++        Log.i("DEBUG","ref.length (frm)= "+ref.length);
++        Log.i("DEBUG","ref.length[0] (bin)= "+ref[0].length);
+ 
+-        for (int f = 0; f < nFreqs; f++) {
+-            //Log.i("DEBUG", "bin = " + f);
+-            for (int s = 0; s < nSrc; s++) {
+-                //Log.i("DEBUG", "src = " + s);
+-                num[f][s] = Complex.ZERO;
+-                scale[f][s] = Complex.ZERO;
+-                for (int t = 0; t < nFrames; t++) {
+-                    //Log.i("DEBUG", "frm = " + t);
+-                    //Log.i("DEBUG", "ref[t][f] = " + ref[t][f]);
+-                    //Log.i("DEBUG", "out[s][t][f] = " + out[s][t][f]);
++        for(int f=0;f<nFreqs; f++){
++        //Log.i("DEBUG", "bin = " + f);
++        for(int s=0;s<nSrc; s++){
++        //Log.i("DEBUG", "src = " + s);
++        num[f][s]=Complex.ZERO;
++        scale[f][s]=Complex.ZERO;
++        for(int t=0;t<nFrames; t++){
++        //Log.i("DEBUG", "frm = " + t);
++        //Log.i("DEBUG", "ref[t][f] = " + ref[t][f]);
++        //Log.i("DEBUG", "out[s][t][f] = " + out[s][t][f]);
+ 
+-                    num[f][s] = num[f][s].add(ref[t][f].conjugate().multiply(out[s][t][f]));
++        num[f][s]=num[f][s].add(ref[t][f].conjugate().multiply(out[s][t][f]));
+ 
+-                    //Log.i("DEBUG", "num = " + num[f][s]);
+-                    denom[f][s] += (pow(out[s][t][f].abs(), 2.0));
+-                    //Log.i("DEBUG", "denom = " + denom[f][s]);
+-                }
+-                if (denom[f][s] > 0) {
+-                    //Log.i("DEBUG", "denom > 0");
+-                    scale[f][s] = num[f][s].divide(denom[f][s]);
+-                    //Log.i("DEBUG", "scale = " + scale[f][s]);
+-                }
+-            }
++        //Log.i("DEBUG", "num = " + num[f][s]);
++        denom[f][s]+=(pow(out[s][t][f].abs(),2.0));
++        //Log.i("DEBUG", "denom = " + denom[f][s]);
++        }
++        if(denom[f][s]>0){
++        //Log.i("DEBUG", "denom > 0");
++        scale[f][s]=num[f][s].divide(denom[f][s]);
++        //Log.i("DEBUG", "scale = " + scale[f][s]);
++        }
++        }
+         }
+ 
+-        Log.i("DEBUG", "Calculating scale matrix - done");
++        Log.i("DEBUG","Calculating scale matrix - done");
+ 
+         return scale;
+-    }
+-}
++        }
++        }

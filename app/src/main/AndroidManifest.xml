@@ -5,6 +5,8 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <application
         android:allowBackup="true"
@@ -13,19 +15,35 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/AppTheme">
-
-        <activity android:name=".MainActivity">
+        <activity android:name=".activities_usermode.ASRActivity_UserMode"></activity>
+        <activity android:name=".activities_usermode.BSSMenuActivity_UserMode" />
+        <activity android:name=".activities_usermode.MainActivity_UserMode" />
+        <activity android:name=".ModeActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-
-        <activity android:name=".STFTActivityComplex"
+        <activity
+            android:name=".activities_devmode.MainActivity_DevMode"
+            android:parentActivityName=".ModeActivity" />
+        <activity
+            android:name=".activities_devmode.STFTActivity_DevMode"
             android:label="@string/STFTActivity_name"
-            android:parentActivityName=".MainActivity">
-        </activity>
+            android:parentActivityName=".activities_devmode.MainActivity_DevMode" />
+        <activity
+            android:name=".activities_devmode.BSSMenuActivity_DevMode"
+            android:label="@string/BSSMenuActivity_name"
+            android:parentActivityName=".activities_devmode.STFTActivity_DevMode" />
+        <activity
+            android:name=".activities_devmode.AuxIVAActivity_DevMode"
+            android:parentActivityName=".activities_devmode.BSSMenuActivity_DevMode" />
+        <activity
+            android:name=".activities_devmode.AuxIVAParallelActivity_DevMode"
+            android:parentActivityName=".activities_devmode.BSSMenuActivity_DevMode" />
+
+        <uses-library android:name="org.apache.http.legacy" android:required="false"/>
     </application>
 
 </manifest>
