@@ -2,6 +2,7 @@ package com.example.administrator.audiorecord.audioprocessing.bss;
 
 import android.util.Log;
 
+import org.apache.commons.lang3.SerializationUtils;
 import org.apache.commons.math3.complex.Complex;
 import org.apache.commons.math3.complex.ComplexField;
 import org.apache.commons.math3.linear.Array2DRowFieldMatrix;
@@ -11,11 +12,12 @@ import org.apache.commons.math3.linear.FieldLUDecomposition;
 import java.util.Arrays;
 import java.util.stream.IntStream;
 
-import static java.lang.Math.cosh;
-import static java.lang.Math.log;
-import static java.lang.Math.pow;
-import static java.lang.Math.sqrt;
-import static java.lang.Math.tanh;
+import static com.example.administrator.audiorecord.audioprocessing.commons.Conjugate.conjugate;
+import static org.apache.commons.math3.util.FastMath.cosh;
+import static org.apache.commons.math3.util.FastMath.log;
+import static org.apache.commons.math3.util.FastMath.pow;
+import static org.apache.commons.math3.util.FastMath.sqrt;
+import static org.apache.commons.math3.util.FastMath.tanh;
 
 public class AuxIVAParallel {
 
@@ -39,7 +41,7 @@ public class AuxIVAParallel {
 
     private Complex[][] G_r; // src by (frm by frm)
 
-    private double EPSILON = 1e-15;
+    private double EPSILON = 1e-8;
     private Complex[] norm, inorm;
     private Array2DRowFieldMatrix<Complex>[] w, WV;
     private FieldDecompositionSolver<Complex>[] solver;
@@ -92,7 +94,7 @@ public class AuxIVAParallel {
             STFT representation of separated signal
         */
 
-        Log.i("DEBUG", "AuxIVA now preparing");
+        //Log.i("DEBUG", "AuxIVA now preparing");
 
         //Log.i("DEBUG", "Getting STFT dimension - channels");
         this.nChannels = STFTin.length;
@@ -109,29 +111,22 @@ public class AuxIVAParallel {
         // using nSrc as a separate variable to allow future addition of the overdetermined case
 
         //Log.i("DEBUG", "Initializing STFTin");
-        this.STFTin = new Complex[this.nChannels][this.nFrames][this.nFreqs];
+        //this.STFTin = new Complex[this.nChannels][this.nFrames][this.nFreqs];
 
         // preemptively prevents the original STFT data from being modified
         //Log.i("DEBUG", "Creating a duplicate of STFT data");
 
-        this.STFTin = STFTin.clone();
-
-        /*
-        for (int c = 0; c < this.nChannels; c++) {
-            for (int i = 0; i < this.nFrames; i++) {
-                System.arraycopy(STFTin[c][i], 0, this.STFTin[c][i], 0, this.nFreqs);
-            }
-        }
-        */
-
-        Complex[][] temp = new Complex[nFrames][nChannels];
-        Complex[][] tempConj = new Complex[nFrames][nChannels];
+        this.STFTin = SerializationUtils.clone(STFTin);
 
         X = new Array2DRowFieldMatrix[nFreqs];
         Xcopy = new Array2DRowFieldMatrix[nFreqs];
         Xconj = new Array2DRowFieldMatrix[nFreqs];
         Y = new Array2DRowFieldMatrix[nFreqs];
-        for (int f = 0; f < nFreqs; f++) {
+        IntStream.range(0, nFreqs).parallel().forEach(f -> {
+
+            Complex[][] temp = new Complex[nFrames][nChannels];
+            Complex[][] tempConj = new Complex[nFrames][nChannels];
+
             for (int t = 0; t < this.nFrames; t++) {
                 for (int c = 0; c < this.nChannels; c++) {
                     temp[t][c] = STFTin[c][t][f];
@@ -141,14 +136,14 @@ public class AuxIVAParallel {
             }
             X[f] = new Array2DRowFieldMatrix<>(temp);
             Xconj[f] = new Array2DRowFieldMatrix<>(tempConj);
-        }
+        });
 
         Xcopy = X.clone();
         Y = X.clone();
 
         /*
         System.arraycopy(X, 0, Xcopy, 0, nFreqs);
-        System.arraycopy(X, 0, Y, 0, nFreqs);
+        System.arraycopy(X, 0, STFTper, 0, nFreqs);
         */
 
         Identity = new Array2DRowFieldMatrix<>(ComplexField.getInstance(), nChannels, nSrc);
@@ -165,14 +160,14 @@ public class AuxIVAParallel {
         // initializing the demixing matrix
         //Log.i("DEBUG", "Initializing demixing matrix");
         W = new Array2DRowFieldMatrix[nFreqs];
-        Wconj = new Array2DRowFieldMatrix[nFreqs];
         if (W0 == null) {
             //Log.i("DEBUG", "Initializing with identity");
 
             for (int f = 0; f < this.nFreqs; f++) {
                 W[f] = (Array2DRowFieldMatrix<Complex>) Identity.copy();
-                Wconj[f] = (Array2DRowFieldMatrix<Complex>) Identity.copy();
             }
+
+            Wconj = SerializationUtils.clone(W);
             //Log.i("DEBUG", "Initializing with identity - done");
         } else {
             //Log.i("DEBUG", "Initializing with specified value");
@@ -216,7 +211,7 @@ public class AuxIVAParallel {
     }
 
     public void run() {
-        Log.i("DEBUG", "AuxIVA now running");
+        //Log.i("DEBUG", "AuxIVA now running");
 
         for (int epoch = 0; epoch < nItr; epoch++) {
             demix(Y, X, W);
@@ -230,11 +225,11 @@ public class AuxIVAParallel {
         if (isProjBack) {
             projectBack();
         }
-        Log.i("DEBUG", "AuxIVA - done");
+        //Log.i("DEBUG", "AuxIVA - done");
     }
 
     private void calculateG() {
-        for (int t = 0; t < nFrames; t++) {
+        IntStream.range(0, nFrames).parallel().forEach(t -> {
             for (int s = 0; s < nSrc; s++) {
                 r[t][s] = 0.0;
                 for (int f = 0; f < nFreqs; f++) {
@@ -243,13 +238,13 @@ public class AuxIVAParallel {
                 r[t][s] = sqrt(r[t][s]); // nFrames by nSrc
 
                 if (r[t][s] == 0) {
-                    Log.i("DEBUG", "r is zero!");
+                    Log.i("DEBUG", "double_r is zero!");
                     r[t][s] = EPSILON;
                 }
 
                 G_r[t][s] = new Complex(cFuncCalc(cFunc, "df", r[t][s]) / r[t][s]); // nFrames by nSrc
             }
-        }
+        });
     }
 
     private double cFuncCalc(String func, String deriv, double r) {
@@ -290,7 +285,7 @@ public class AuxIVAParallel {
     }
 
     private void calculateV() {
-        IntStream.range(0, nFreqs).parallel().forEach(f -> {
+        IntStream.range(0, nFreqs).forEach(f -> { //parallel().
             for (int s = 0; s < nSrc; s++) {
                 for (int t = 0; t < nFrames; t++) {
                     for (int c = 0; c < nChannels; c++) {
@@ -334,16 +329,17 @@ public class AuxIVAParallel {
 
     private void projectBack() {
         Complex[][] scale = projBackScale(STFTout, STFTin[0]);
-        Complex thisSrcFrameScaleConj;
 
-        for (int s = 0; s < nSrc; s++) {
-            for (int f = 0; f < nFreqs; f++) {
+
+        IntStream.range(0, nFreqs).parallel().forEach(f -> {
+            for (int s = 0; s < nSrc; s++) {
+                Complex thisSrcFrameScaleConj;
                 thisSrcFrameScaleConj = scale[s][f].conjugate();
                 for (int t = 0; t < nFrames; t++) {
                     STFTout[s][t][f] = STFTout[s][t][f].multiply(thisSrcFrameScaleConj);
                 }
             }
-        }
+        });
     }
 
     private Complex[][] projBackScale(Complex[][][] out, Complex[][] ref) {
@@ -368,31 +364,18 @@ public class AuxIVAParallel {
         return scale;
     }
 
-    private Array2DRowFieldMatrix<Complex> conjugate(Array2DRowFieldMatrix<Complex> z) {
-
-        Array2DRowFieldMatrix<Complex> zconj = new Array2DRowFieldMatrix<>(ComplexField.getInstance(), z.getRowDimension(), z.getColumnDimension());
-
-        for (int r = 0; r < z.getRowDimension(); r++) {
-            for (int c = 0; c < z.getColumnDimension(); c++) {
-                zconj.setEntry(r, c, z.getEntry(r, c).conjugate());
-            }
-        }
-
-        return zconj;
-    }
-
     private void OutMatrixToOutArray() {
-        for (int f = 0; f < this.nFreqs; f++) {
+        IntStream.range(0, nFreqs).parallel().forEach(f -> {
             for (int t = 0; t < nFrames; t++) {
                 for (int c = 0; c < this.nSrc; c++) {
                     STFTout[c][t][f] = Y[f].getEntry(t, c);
                 }
             }
-        }
+        });
     }
 
     public Complex[][][] getSourceEstimatesSTFT() {
-        return STFTout;
+        return SerializationUtils.clone(STFTout);
     }
 
     public void printDemix() {

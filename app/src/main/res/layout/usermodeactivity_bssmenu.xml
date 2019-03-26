@@ -4,7 +4,7 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    tools:context=".activities_usermode.BSSMenuActivity_UserMode">
+    tools:context=".activities.BSSActivity">
 
     <Spinner
         android:id="@+id/spinnerBSS"
@@ -30,6 +30,19 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
+
+    <TextView
+        android:id="@+id/txtBssSrc"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="24dp"
+        android:layout_marginTop="24dp"
+        android:text="@string/choose_number_of_sources"
+        android:textAlignment="viewStart"
+        app:layout_constraintEnd_toStartOf="@+id/spinnerBssSrc"
+        app:layout_constraintHorizontal_bias="0.5"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/spinnerBSS" />
 
     <Button
         android:id="@+id/bNextToBSS"
@@ -98,7 +111,7 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintHorizontal_bias="0.5"
         app:layout_constraintStart_toEndOf="@+id/fabPlaySrc"
-        app:layout_constraintTop_toBottomOf="@+id/spinnerSrc"
+        app:layout_constraintTop_toBottomOf="@+id/spinnerPlaybackSrc"
         app:srcCompat="@drawable/ic_round_stop_24px" />
 
     <android.support.constraint.Guideline
@@ -125,7 +138,7 @@
         app:layout_constraintTop_toTopOf="@+id/guideline" />
 
     <Spinner
-        android:id="@+id/spinnerSrc"
+        android:id="@+id/spinnerPlaybackSrc"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_marginStart="24dp"
@@ -158,5 +171,16 @@
         app:layout_constraintHorizontal_bias="0.5"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
+
+    <Spinner
+        android:id="@+id/spinnerBssSrc"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="24dp"
+        android:layout_marginEnd="24dp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.5"
+        app:layout_constraintStart_toEndOf="@+id/txtBssSrc"
+        app:layout_constraintTop_toBottomOf="@+id/spinnerBSS" />
 
 </android.support.constraint.ConstraintLayout>

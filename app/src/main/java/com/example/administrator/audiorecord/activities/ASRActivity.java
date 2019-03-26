@@ -1,4 +1,4 @@
-package com.example.administrator.audiorecord.activities_usermode;
+package com.example.administrator.audiorecord.activities;
 
 import android.annotation.SuppressLint;
 import android.content.Context;
@@ -39,11 +39,11 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static android.os.Environment.getExternalStorageDirectory;
-import static com.example.administrator.audiorecord.activities_usermode.BSSMenuActivity_UserMode.FILE_NAME_NO_EXT;
-import static com.example.administrator.audiorecord.activities_usermode.BSSMenuActivity_UserMode.NUM_CHANNELS;
-import static com.example.administrator.audiorecord.activities_usermode.BSSMenuActivity_UserMode.SAMPLING_RATE;
+import static com.example.administrator.audiorecord.activities.BSSActivity.FILE_NAME_NO_EXT;
+import static com.example.administrator.audiorecord.activities.BSSActivity.NUM_CHANNELS;
+import static com.example.administrator.audiorecord.activities.BSSActivity.SAMPLING_RATE;
 
-public class ASRActivity_UserMode extends AppCompatActivity implements AdapterView.OnItemSelectedListener {
+public class ASRActivity extends AppCompatActivity implements AdapterView.OnItemSelectedListener {
 
     final int ALL_SOURCES_POSITION = 0;
 
@@ -149,7 +149,7 @@ public class ASRActivity_UserMode extends AppCompatActivity implements AdapterVi
 
             isAllSourcesTranscribed.set(true);
 
-            runOnUiThread(ASRActivity_UserMode.this::readTranscription);
+            runOnUiThread(ASRActivity.this::readTranscription);
 
             return null;
         }
@@ -274,7 +274,6 @@ public class ASRActivity_UserMode extends AppCompatActivity implements AdapterVi
     }
 
     void readTranscription() {
-
         if (readAllSources) {
             stringBuilder = new StringBuilder();
             for (int s = 0; s < nSrc; s++) {
@@ -282,7 +281,6 @@ public class ASRActivity_UserMode extends AppCompatActivity implements AdapterVi
                 stringBuilder.append(transcriptions[s]);
                 stringBuilder.append("\n\n");
             }
-
             tvTranscriptions.setText(stringBuilder.toString());
         } else {
             tvTranscriptions.setText(transcriptions[currentSource]);

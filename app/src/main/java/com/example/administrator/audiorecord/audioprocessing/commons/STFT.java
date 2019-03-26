@@ -8,13 +8,14 @@ import org.apache.commons.math3.transform.FastFourierTransformer;
 import java.util.stream.IntStream;
 
 import static java.lang.Math.PI;
-import static java.lang.Math.ceil;
-import static java.lang.Math.cos;
-import static java.lang.Math.sin;
-import static java.lang.Math.sqrt;
 import static org.apache.commons.math3.transform.DftNormalization.STANDARD;
+import static org.apache.commons.math3.transform.DftNormalization.UNITARY;
 import static org.apache.commons.math3.transform.TransformType.FORWARD;
 import static org.apache.commons.math3.transform.TransformType.INVERSE;
+import static org.apache.commons.math3.util.FastMath.ceil;
+import static org.apache.commons.math3.util.FastMath.cos;
+import static org.apache.commons.math3.util.FastMath.sin;
+import static org.apache.commons.math3.util.FastMath.sqrt;
 
 public class STFT {
 
@@ -25,9 +26,6 @@ public class STFT {
 
     private int nFrames;
     private int nFreqs;
-
-    private int inv_nFrames;
-    private int inv_nFreqs;
 
     private double[] iswin;
 
@@ -185,28 +183,25 @@ public class STFT {
     private void setScalingVec(boolean isFwd, int paddedLength, int winLen, int hopSize,
                                int nFrames, double[] window) {
 
-        final double EPSILON = 1e-8;
+        final double EPSILON = 1e-15;
         double[] swin = new double[paddedLength];
         iswin = new double[paddedLength];
 
-        IntStream.range(0, nFrames).parallel().forEach(i -> {
+        for(int i = 0; i < nFrames; i++){
             for (int j = 0; j < winLen; j++) {
                 swin[i * hopSize + j] = swin[i * hopSize + j] + window[j] * window[j];
             }
-        });
+        }
 
-        IntStream.range(0, paddedLength).parallel().forEach(i -> {
-            if (swin[i] == 0) {
-                swin[i] = EPSILON;
+        for(int i = 0; i < paddedLength; i++){
+            if (isFwd) {
+                swin[i] = sqrt(swin[i] * winLen);
             } else {
-                if (isFwd) {
-                    swin[i] = sqrt(swin[i] * winLen);
-                } else {
-                    swin[i] = sqrt(swin[i] / winLen);
-                }
+                swin[i] = sqrt(swin[i] / winLen);
             }
-            iswin[i] = 1.0 / swin[i];
-        });
+
+            iswin[i] = 1.0 / (swin[i] + EPSILON);
+        }
     }
 
     private void getSTFTwindow(String winFunc, double[] window, int winLen) {
@@ -214,7 +209,7 @@ public class STFT {
             case "sine":
                 // sine window
                 for (int i = 0; i < winLen; i++) {
-                    window[i] = sin(PI / winLen * ((double) i + 0.5));
+                    window[i] = sin(PI / winLen * (double) i);
                 }
                 break;
             case "hann":

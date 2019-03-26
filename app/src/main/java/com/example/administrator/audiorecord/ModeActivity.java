@@ -5,8 +5,7 @@ import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.view.View;
 
-import com.example.administrator.audiorecord.activities_devmode.MainActivity_DevMode;
-import com.example.administrator.audiorecord.activities_usermode.MainActivity_UserMode;
+import com.example.administrator.audiorecord.activities.MainActivity;
 
 public class ModeActivity extends AppCompatActivity {
 
@@ -17,12 +16,11 @@ public class ModeActivity extends AppCompatActivity {
     }
 
     public void launchUserMode(View view){
-        Intent intent = new Intent(this, MainActivity_UserMode.class);
+        Intent intent = new Intent(this, MainActivity.class);
         startActivity(intent);
     }
 
     public void launchDevMode(View view){
-        Intent intent = new Intent(this, MainActivity_DevMode.class);
-        startActivity(intent);
+
     }
 }

@@ -1,172 +1,196 @@
-#!/usr/bin/env sh
+package com.example.administrator.audiorecord.audioprocessing.bss;
 
-##############################################################################
-##
-##  Gradle start up script for UN*X
-##
-##############################################################################
+import android.util.Log;
 
-# Attempt to set APP_HOME
-# Resolve links: $0 may be a link
-PRG="$0"
-# Need this for relative symlinks.
-while [ -h "$PRG" ] ; do
-    ls=`ls -ld "$PRG"`
-    link=`expr "$ls" : '.*-> \(.*\)$'`
-    if expr "$link" : '/.*' > /dev/null; then
-        PRG="$link"
-    else
-        PRG=`dirname "$PRG"`"/$link"
-    fi
-done
-SAVED="`pwd`"
-cd "`dirname \"$PRG\"`/" >/dev/null
-APP_HOME="`pwd -P`"
-cd "$SAVED" >/dev/null
+import com.example.administrator.audiorecord.audioprocessing.commons.ComplexSingularValueDecomposition;
+import com.example.administrator.audiorecord.audioprocessing.commons.Whitening;
 
-APP_NAME="Gradle"
-APP_BASE_NAME=`basename "$0"`
+import org.apache.commons.math3.complex.Complex;
+import org.apache.commons.math3.complex.ComplexField;
+import org.apache.commons.math3.linear.Array2DRowFieldMatrix;
+import org.apache.commons.math3.linear.Array2DRowRealMatrix;
 
-# Add default JVM options here. You can also use JAVA_OPTS and GRADLE_OPTS to pass JVM options to this script.
-DEFAULT_JVM_OPTS=""
+import java.util.Arrays;
+import java.util.stream.IntStream;
 
-# Use the maximum available, or set MAX_FD != -1 to use that value.
-MAX_FD="maximum"
+import static java.lang.Math.abs;
+import static java.lang.Math.exp;
+import static java.lang.Math.pow;
+import static java.lang.Math.random;
+import static java.lang.Math.signum;
+import static java.lang.Math.sqrt;
 
-warn () {
-    echo "$*"
-}
+public class AbsCosSimSCA {
 
-die () {
-    echo
-    echo "$*"
-    echo
-    exit 1
-}
+    private Complex[][][] STFTin, STFTout;
 
-# OS specific support (must be 'true' or 'false').
-cygwin=false
-msys=false
-darwin=false
-nonstop=false
-case "`uname`" in
-  CYGWIN* )
-    cygwin=true
-    ;;
-  Darwin* )
-    darwin=true
-    ;;
-  MINGW* )
-    msys=true
-    ;;
-  NONSTOP* )
-    nonstop=true
-    ;;
-esac
+    private int nSrc, nItr;
+    private int nChannels, nFrames, nFreqs;
+    private boolean isProjBack, derivCheck, isRowDecoupling;
 
-CLASSPATH=$APP_HOME/gradle/wrapper/gradle-wrapper.jar
+    private final double EPSILON = 1e-8;
+    private final double PROGRESS_TOLERANCE = 1e-8;
 
-# Determine the Java command to use to start the JVM.
-if [ -n "$JAVA_HOME" ] ; then
-    if [ -x "$JAVA_HOME/jre/sh/java" ] ; then
-        # IBM's JDK on AIX uses strange locations for the executables
-        JAVACMD="$JAVA_HOME/jre/sh/java"
-    else
-        JAVACMD="$JAVA_HOME/bin/java"
-    fi
-    if [ ! -x "$JAVACMD" ] ; then
-        die "ERROR: JAVA_HOME is set to an invalid directory: $JAVA_HOME
+    Array2DRowFieldMatrix<Complex>[] STFTwhite;
+    Array2DRowFieldMatrix<Complex>[] STFTper;
 
-Please set the JAVA_HOME variable in your environment to match the
-location of your Java installation."
-    fi
-else
-    JAVACMD="java"
-    which java >/dev/null 2>&1 || die "ERROR: JAVA_HOME is not set and no 'java' command could be found in your PATH.
+    Array2DRowFieldMatrix<Complex>[] Q_PCA;
+    Array2DRowFieldMatrix<Complex>[] demix;
 
-Please set the JAVA_HOME variable in your environment to match the
-location of your Java installation."
-fi
+    Complex eta;
 
-# Increase the maximum file descriptors if we can.
-if [ "$cygwin" = "false" -a "$darwin" = "false" -a "$nonstop" = "false" ] ; then
-    MAX_FD_LIMIT=`ulimit -H -n`
-    if [ $? -eq 0 ] ; then
-        if [ "$MAX_FD" = "maximum" -o "$MAX_FD" = "max" ] ; then
-            MAX_FD="$MAX_FD_LIMIT"
-        fi
-        ulimit -n $MAX_FD
-        if [ $? -ne 0 ] ; then
-            warn "Could not set maximum file descriptor limit: $MAX_FD"
-        fi
-    else
-        warn "Could not query maximum file descriptor limit: $MAX_FD_LIMIT"
-    fi
-fi
+    final double beta = 12.5;
 
-# For Darwin, add options to specify how the application appears in the dock
-if $darwin; then
-    GRADLE_OPTS="$GRADLE_OPTS \"-Xdock:name=$APP_NAME\" \"-Xdock:icon=$APP_HOME/media/gradle.icns\""
-fi
+    double[][][] permutations;
 
-# For Cygwin, switch paths to Windows format before running java
-if $cygwin ; then
-    APP_HOME=`cygpath --path --mixed "$APP_HOME"`
-    CLASSPATH=`cygpath --path --mixed "$CLASSPATH"`
-    JAVACMD=`cygpath --unix "$JAVACMD"`
+    //Complex[][] randomInit;
 
-    # We build the pattern for arguments to be converted via cygpath
-    ROOTDIRSRAW=`find -L / -maxdepth 1 -mindepth 1 -type d 2>/dev/null`
-    SEP=""
-    for dir in $ROOTDIRSRAW ; do
-        ROOTDIRS="$ROOTDIRS$SEP$dir"
-        SEP="|"
-    done
-    OURCYGPATTERN="(^($ROOTDIRS))"
-    # Add a user-defined pattern to the cygpath arguments
-    if [ "$GRADLE_CYGPATTERN" != "" ] ; then
-        OURCYGPATTERN="$OURCYGPATTERN|($GRADLE_CYGPATTERN)"
-    fi
-    # Now convert the arguments - kludge to limit ourselves to /bin/sh
-    i=0
-    for arg in "$@" ; do
-        CHECK=`echo "$arg"|egrep -c "$OURCYGPATTERN" -`
-        CHECK2=`echo "$arg"|egrep -c "^-"`                                 ### Determine if an option
+    public AbsCosSimSCA(Complex[][][] STFTin, int nItr, boolean isProjBack, int nSrc, double eta, boolean derivCheck, boolean isRowDecoupling) {
 
-        if [ $CHECK -ne 0 ] && [ $CHECK2 -eq 0 ] ; then                    ### Added a condition
-            eval `echo args$i`=`cygpath --path --ignore --mixed "$arg"`
-        else
-            eval `echo args$i`="\"$arg\""
-        fi
-        i=$((i+1))
-    done
-    case $i in
-        (0) set -- ;;
-        (1) set -- "$args0" ;;
-        (2) set -- "$args0" "$args1" ;;
-        (3) set -- "$args0" "$args1" "$args2" ;;
-        (4) set -- "$args0" "$args1" "$args2" "$args3" ;;
-        (5) set -- "$args0" "$args1" "$args2" "$args3" "$args4" ;;
-        (6) set -- "$args0" "$args1" "$args2" "$args3" "$args4" "$args5" ;;
-        (7) set -- "$args0" "$args1" "$args2" "$args3" "$args4" "$args5" "$args6" ;;
-        (8) set -- "$args0" "$args1" "$args2" "$args3" "$args4" "$args5" "$args6" "$args7" ;;
-        (9) set -- "$args0" "$args1" "$args2" "$args3" "$args4" "$args5" "$args6" "$args7" "$args8" ;;
-    esac
-fi
+        this.STFTin = STFTin;
 
-# Escape application args
-save () {
-    for i do printf %s\\n "$i" | sed "s/'/'\\\\''/g;1s/^/'/;\$s/\$/' \\\\/" ; done
-    echo " "
-}
-APP_ARGS=$(save "$@")
+        this.nItr = nItr;
 
-# Collect all arguments for the java command, following the shell quoting and substitution rules
-eval set -- $DEFAULT_JVM_OPTS $JAVA_OPTS $GRADLE_OPTS "\"-Dorg.gradle.appname=$APP_BASE_NAME\"" -classpath "\"$CLASSPATH\"" org.gradle.wrapper.GradleWrapperMain "$APP_ARGS"
+        this.eta = new Complex(eta);
 
-# by default we should be in the correct project dir, but when run from Finder on Mac, the cwd is wrong
-if [ "$(uname)" = "Darwin" ] && [ "$HOME" = "$PWD" ]; then
-  cd "$(dirname "$0")"
-fi
+        this.derivCheck = derivCheck;
+        this.isRowDecoupling = isRowDecoupling;
 
-exec "$JAVACMD" "$@"
+        this.nSrc = nSrc;
+
+        this.nChannels = STFTin.length;
+        this.nFrames = STFTin[0].length;
+        this.nFreqs = STFTin[0][0].length;
+
+        STFTout = new Complex[this.nSrc][nFrames][nFreqs];
+
+        STFTwhite = new Array2DRowFieldMatrix[nFreqs];
+        STFTper = new Array2DRowFieldMatrix[nFreqs];
+        demix = new Array2DRowFieldMatrix[nFreqs];
+
+        permutations = new double[nFreqs][nFrames][nSrc];
+
+        /*
+        randomInit = new Complex[nChannels][this.nSrc];
+        */
+
+        /*
+        for (int c = 0; c < nChannels; c++) {
+            for (int s = 0; s < nSrc; s++) {
+                if (c == s) {
+                    randomInit[c][s] = Complex.ONE;
+                } else {
+                    randomInit[c][s] = Complex.ZERO;
+                }
+            }
+        }
+        */
+    }
+
+    public void run() {
+        whiten();
+
+        IntStream.range(0, nFreqs).parallel().forEach(this::runThisFreq); //
+
+        //Log.i("DEBUG", "COMPLETED ALL FREQUENCIES");
+
+        alignPermutation();
+    }
+
+    private void whiten() {
+
+        /*
+        IMPORTANT:
+
+        STFTin is nChannels by nFrames by nFreq to match STFT's output
+
+        However,
+
+        STFTout is nFreq by nChannels by nFrames to simplify further calculations
+        */
+
+        /*if (derivCheck) {
+
+            Complex[][][] STFT = new Complex[nFreqs][nChannels][nFrames];
+
+            for (int c = 0; c < nChannels; c++) {
+                for (int t = 0; t < nFrames; t++) {
+                    for (int f = 0; f < nFreqs; f++) {
+                        STFT[f][c][t] = STFTin[c][t][f];
+                    }
+                }
+            }
+
+            for (int f = 0; f < nFreqs; f++) {
+                STFTwhite[f] = new Array2DRowFieldMatrix<>(STFT[f]);
+            }
+
+        } else {*/
+        WhiteningNew whitening = new WhiteningNew(STFTin);
+        whitening.run();
+        STFTwhite = whitening.getWhitenedMatrixArray(); // nFreqs x (nChannels x nFrames)
+
+        Q_PCA = whitening.getQ_PCA();
+
+    }
+
+    private void runThisFreq(int f) {
+
+        //Log.i("DEBUG", "bin = " + f);
+
+        /* normalizing the columns of X */
+
+        Array2DRowFieldMatrix<Complex> X_bar = STFTwhite[f];
+
+        //Log.i("DEBUG", "X = " + X_bar);
+
+        double colNorm;
+
+        for (int t = 0; t < nFrames; t++) {
+
+            colNorm = 0.0;
+
+            for (int c = 0; c < nChannels; c++) {
+                colNorm += pow(X_bar.getEntry(c, t).abs(), 2.0);
+            }
+
+            colNorm = sqrt(colNorm + EPSILON);
+
+            for (int c = 0; c < nChannels; c++) {
+                X_bar.multiplyEntry(c, t, Complex.ONE.divide(colNorm));
+            }
+        }
+
+        //Log.i("DEBUG", "X_bar = " + X_bar);
+        /* checking */
+        /*
+            double checkColNorm;
+
+            for (int t = 0; t < nFrames; t++) {
+
+                checkColNorm = 0.0;
+
+                for (int c = 0; c < nChannels; c++) {
+                    checkColNorm += pow(X_bar.getEntry(c, t).abs(), 2.0);
+                }
+
+                checkColNorm = sqrt(checkColNorm);
+
+                //Log.i("DEBUG", "frame " + t + " norm = " + checkColNorm);
+            }
+        */
+
+        /* Initializing mixing matrix */
+
+        Complex[][] randomInit = new Complex[nChannels][nSrc];
+
+        for (int c = 0; c < nChannels; c++) {
+            for (int s = 0; s < nSrc; s++) {
+                randomInit[c][s] = new Complex(random(), random());
+            }
+        }
+
+
+        /* decouple the rows of A */
+
+        Array2DRowFieldMatrix<Complex> A = new Array2DRowFieldMatrix<>(randomInit);

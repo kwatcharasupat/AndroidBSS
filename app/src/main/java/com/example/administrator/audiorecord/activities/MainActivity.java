@@ -1,4 +1,4 @@
-package com.example.administrator.audiorecord.activities_usermode;
+package com.example.administrator.audiorecord.activities;
 
 import android.Manifest;
 import android.content.Intent;
@@ -30,18 +30,18 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.Locale;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static android.os.Environment.getExternalStorageDirectory;
 
-public class MainActivity_UserMode extends AppCompatActivity {
+public class MainActivity extends AppCompatActivity {
 
     private static final int SAMPLING_RATE_IN_HZ = 16000;   //44100 Hz is supported on all devices
     private static final int CHANNEL_CONFIG = AudioFormat.CHANNEL_IN_STEREO;
     private static final int AUDIO_FORMAT = AudioFormat.ENCODING_PCM_16BIT;
     private static final int BUFFER_SIZE_FACTOR = 2; // preemptively allocated space
     private static final int BUFFER_SIZE = AudioRecord.getMinBufferSize(SAMPLING_RATE_IN_HZ, CHANNEL_CONFIG, AUDIO_FORMAT) * BUFFER_SIZE_FACTOR;
-
 
 
     private int nChannels = 2;
@@ -79,6 +79,7 @@ public class MainActivity_UserMode extends AppCompatActivity {
         requestWriteExternalPermission();
         requestInternetPermission();
         requestNetworkStatePermission();
+        requestWakeLockPermission();
 
         Switch switchTestMode = findViewById(R.id.switchTestMode);
 
@@ -192,9 +193,11 @@ public class MainActivity_UserMode extends AppCompatActivity {
     }
 
     private void stopPlayback() {
-        audioTrack.pause();
-        audioTrack.flush();
-        audioTrack.release();
+
+        if (audioTrack.getPlayState() != AudioTrack.PLAYSTATE_STOPPED) {
+            audioTrack.stop();
+        }
+
         playbackThread.interrupt();
         playbackThread = null;
     }
@@ -206,7 +209,7 @@ public class MainActivity_UserMode extends AppCompatActivity {
 
             Log.i("DEBUG", "Now recording");
 
-            SimpleDateFormat formatter = new SimpleDateFormat("yyMMddHHmmss");
+            SimpleDateFormat formatter = new SimpleDateFormat("yyMMddHHmmss", Locale.getDefault());
             Date dateTimeNow = new Date();
             fileNameNoExt = "recording" + formatter.format(dateTimeNow);
             fileName = fileNameNoExt + ".pcm";
@@ -345,7 +348,6 @@ public class MainActivity_UserMode extends AppCompatActivity {
             }
 
             runOnUiThread(() -> saveBar.setText("Recording saved to file").show());
-
         }
     }
 
@@ -445,6 +447,30 @@ public class MainActivity_UserMode extends AppCompatActivity {
         }
     }
 
+    private void requestWakeLockPermission() {
+        //check API version, do nothing if API version < 23!
+        int currentapiVersion = android.os.Build.VERSION.SDK_INT;
+        if (currentapiVersion > android.os.Build.VERSION_CODES.LOLLIPOP) {
+
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.WAKE_LOCK) != PackageManager.PERMISSION_GRANTED) {
+
+                // Should we show an explanation?
+                if (ActivityCompat.shouldShowRequestPermissionRationale(this, Manifest.permission.WAKE_LOCK)) {
+
+                    // Show an expanation to the user *asynchronously* -- don't block
+                    // this thread waiting for the user's response! After the user
+                    // sees the explanation, try again to request the permission.
+
+                } else {
+
+                    // No explanation needed, we can request the permission.
+
+                    ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.WAKE_LOCK}, 1);
+                }
+            }
+        }
+    }
+
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String permissions[], @NonNull int[] grantResults) {
         switch (requestCode) {
@@ -474,11 +500,39 @@ public class MainActivity_UserMode extends AppCompatActivity {
 
         Log.i("DEBUG", "Launching next activity");
 
-        Intent intent = new Intent(this, BSSMenuActivity_UserMode.class);
+        Intent intent = new Intent(this, BSSActivity.class);
 
         if (isTestMode.get()) {
-            //fileNameNoExt = "testAudio";
-            fileNameNoExt = "newTest";
+
+//            fileNameNoExt = "newTest";
+//            fileNameNoExt = "dev1_male2_inst_mix";
+
+//            List of test files:
+//
+//            3 sources:
+//            fileNameNoExt = "dev1_male3_inst_mix";
+            fileNameNoExt = "dev1_male3_liverec_130ms_1m_mix";
+//            fileNameNoExt = "dev1_male3_liverec_130ms_5cm_mix";
+//            fileNameNoExt = "dev1_male3_liverec_250ms_1m_mix";
+//            fileNameNoExt = "dev1_male3_liverec_250ms_5cm_mix";
+//            fileNameNoExt = "dev1_female3_inst_mix";
+//            fileNameNoExt = "dev1_female3_liverec_130ms_1m_mix";
+//            fileNameNoExt = "dev1_female3_liverec_130ms_5cm_mix";
+//            fileNameNoExt = "dev1_female3_liverec_250ms_1m_mix";
+//            fileNameNoExt = "dev1_female3_liverec_250ms_5cm_mix";
+//
+//            4 sources:
+//            fileNameNoExt = "dev1_male4_inst_mix";
+//            fileNameNoExt = "dev1_male4_liverec_130ms_1m_mix";
+//            fileNameNoExt = "dev1_male4_liverec_130ms_5cm_mix";
+//            fileNameNoExt = "dev1_male4_liverec_130ms_1m_mix";
+//            fileNameNoExt = "dev1_male4_liverec_130ms_5cm_mix";
+//            fileNameNoExt = "dev1_female4_inst_mix";
+//            fileNameNoExt = "dev1_female4_liverec_130ms_1m_mix";
+//            fileNameNoExt = "dev1_female4_liverec_130ms_5cm_mix";
+//            fileNameNoExt = "dev1_female4_liverec_130ms_1m_mix";
+//            fileNameNoExt = "dev1_female4_liverec_130ms_5cm_mix";
+
             fileName = fileNameNoExt + ".pcm";
         }
 

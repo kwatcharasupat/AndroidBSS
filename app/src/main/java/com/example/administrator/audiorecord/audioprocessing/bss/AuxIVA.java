@@ -96,7 +96,7 @@ public class AuxIVA {
             STFT representation of separated signal
         */
 
-        Log.i("DEBUG", "AuxIVA now preparing");
+        //Log.i("DEBUG", "AuxIVA now preparing");
 
         //Log.i("DEBUG", "Getting STFT dimension - channels");
         this.nChannels = STFTin.length;
@@ -203,10 +203,10 @@ public class AuxIVA {
     }
 
     public void run() {
-        Log.i("DEBUG", "AuxIVA now running");
+        //Log.i("DEBUG", "AuxIVA now running");
 
         for (int runCount = 0; runCount < nItr; runCount++) {
-            Log.i("DEBUG", "Iteration: " + runCount);
+            //Log.i("DEBUG", "Iteration: " + runCount);
             //demixing
             demix(Y, X, W);
             calculateG();
@@ -219,7 +219,7 @@ public class AuxIVA {
         if (isProjBack) {
             projectBack();
         }
-        Log.i("DEBUG", "AuxIVA - done");
+        //Log.i("DEBUG", "AuxIVA - done");
     }
 
     private void projectBack() {
@@ -293,9 +293,9 @@ public class AuxIVA {
     }
 
     private void calculateG() {
-        //Log.i("DEBUG", "Calculating r and G/r");
-        // calculate r and G/r
-        // r(s) = sqrt(sum(|y(f)|^2))
+        //Log.i("DEBUG", "Calculating double_r and G/double_r");
+        // calculate double_r and G/double_r
+        // double_r(s) = sqrt(sum(|y(f)|^2))
 
         for (int t = 0; t < nFrames; t++) {
             for (int s = 0; s < nSrc; s++) {
@@ -304,16 +304,16 @@ public class AuxIVA {
                     rSum += pow(Y[f].getEntry(0, s).abs(), 2.0);
                 }
                 r[t][s] = sqrt(rSum);    // nSrc by nFrames
-                //Log.i("DEBUG", "r["+t+"]["+s+"] = " + r[t][s]);
+                //Log.i("DEBUG", "double_r["+t+"]["+s+"] = " + double_r[t][s]);
                 if (r[t][s] == 0) {
-                    Log.i("DEBUG", "r is zero!");
+                    Log.i("DEBUG", "double_r is zero!");
                     r[t][s] = EPSILON;
                 }
                 G_r[t][s] = (Complex.ZERO).add(cFuncCalc(cFunc, "df", r[t][s]) / r[t][s]); // nSrc by nFrames
                 //Log.i("DEBUG", "G_r["+t+"]["+s+"] = " + G_r[t][s]);
             }
         }
-        //Log.i("DEBUG", "Calculating r and G/r - done");
+        //Log.i("DEBUG", "Calculating double_r and G/double_r - done");
     }
 
     public void runDemixTest() {
@@ -361,7 +361,7 @@ public class AuxIVA {
             Y[f] = X[f].multiply(Wconj[f]);
         }
 
-        //Log.i("DEBUG", "Y = " + Arrays.deepToString(Y));
+        //Log.i("DEBUG", "STFTper = " + Arrays.deepToString(STFTper));
         //Log.i("DEBUG", "Demixing - done");
     }
 

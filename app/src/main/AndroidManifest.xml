@@ -15,9 +15,9 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/AppTheme">
-        <activity android:name=".activities_usermode.ASRActivity_UserMode"></activity>
-        <activity android:name=".activities_usermode.BSSMenuActivity_UserMode" />
-        <activity android:name=".activities_usermode.MainActivity_UserMode" />
+        <activity android:name=".activities.ASRActivity"></activity>
+        <activity android:name=".activities.BSSActivity" />
+        <activity android:name=".activities.MainActivity" />
         <activity android:name=".ModeActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

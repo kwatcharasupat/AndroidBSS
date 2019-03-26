@@ -9,6 +9,8 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 
+import static org.apache.commons.math3.util.FastMath.round;
+
 public class AudioFileWriter {
 
     /*
@@ -116,7 +118,7 @@ public class AudioFileWriter {
         short[] shorts = new short[sampleLength];
 
         for (int i = 0; i < sampleLength; i++) {
-            shorts[i] = (short) (doubles[i] * 32768.0);
+            shorts[i] = (short) round(doubles[i] * 32768.0);
         }
 
         try (DataOutputStream output = new DataOutputStream(new FileOutputStream(waveFile))) {
@@ -135,7 +137,7 @@ public class AudioFileWriter {
 
         for (int i = 0; i < sampleLength; i++) {
             for (int c = 0; c < nChannels; c++) {
-                shorts[i * nChannels + c] = (short) (doubles[c][i] * 32768.0);
+                shorts[i * nChannels + c] = (short) round(doubles[c][i] * 32768.0);
             }
         }
 
