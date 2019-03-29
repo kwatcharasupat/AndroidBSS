@@ -28,7 +28,7 @@ import static org.apache.commons.math3.util.FastMath.signum;
 import static org.apache.commons.math3.util.FastMath.sqrt;
 
 
-public class AbsCosSimSCA {
+public class DirectionalSCA {
 
     private final Complex[][][] STFTin;
     private Complex[][][] STFTout;
@@ -51,7 +51,7 @@ public class AbsCosSimSCA {
     private double[][][] posteriorProb;
 
 
-    public AbsCosSimSCA(Complex[][][] STFTin, int maxItr, int nSrc, double eta, boolean derivCheck, boolean isRowDecoupling) {
+    public DirectionalSCA(Complex[][][] STFTin, int maxItr, int nSrc, double eta, boolean derivCheck, boolean isRowDecoupling) {
 
         this.STFTin = SerializationUtils.clone(STFTin);
 
@@ -119,13 +119,10 @@ public class AbsCosSimSCA {
         STFTwhite = whitening.getWhitenedMatrixArray(); // nFreqs x (nChannels x nFrames)
     }
 
-    private void runThisFreq(int f) {
-        //Log.i("DEBUG", "bin = " + f);
 
-        /* normalizing the columns of X */
+    private Array2DRowFieldMatrix<Complex> normalizeX(Array2DRowFieldMatrix<Complex> X){
 
-        Array2DRowFieldMatrix<Complex> X_bar = (Array2DRowFieldMatrix<Complex>) STFTwhite[f].copy();
-        //Log.i("DEBUG", "X = " + X_bar);
+        Array2DRowFieldMatrix<Complex> X_bar = (Array2DRowFieldMatrix<Complex>) X.copy();
 
         double colNorm;
 
@@ -143,26 +140,10 @@ public class AbsCosSimSCA {
             }
         }
 
-        //Log.i("DEBUG", "X_bar = " + X_bar);
-//         checking
-//
-//            double checkColNorm;
-//
-//            for (int t = 0; t < nFrames; t++) {
-//
-//                checkColNorm = 0.0;
-//
-//                for (int c = 0; c < nChannels; c++) {
-//                    checkColNorm += pow(X_bar.getEntry(c, t).abs(), 2.0);
-//                }
-//
-//                checkColNorm = sqrt(checkColNorm);
-//
-//                Log.i("DEBUG", "frame " + t + " norm = " + checkColNorm);
-//            }
-//
+        return X_bar;
+    }
 
-        /* Initializing mixing matrix */
+    private Array2DRowFieldMatrix<Complex> randomInit(){
 
         Complex[][] randomInit = new Complex[nChannels][nSrc];
 
@@ -172,7 +153,44 @@ public class AbsCosSimSCA {
             }
         }
 
-        Array2DRowFieldMatrix<Complex> A = new Array2DRowFieldMatrix<>(randomInit);
+        return new Array2DRowFieldMatrix<>(randomInit);
+    }
+
+    private Array2DRowFieldMatrix<Complex> normalizeA(Array2DRowFieldMatrix<Complex> Ain){
+
+        Array2DRowFieldMatrix<Complex> Aout = (Array2DRowFieldMatrix<Complex>) Ain.copy();
+
+        double[] AcolNorm = new double[nSrc];
+
+        for (int s = 0; s < nSrc; s++) {
+            AcolNorm[s] = 0.0;
+            for (int c = 0; c < nChannels; c++) {
+                AcolNorm[s] += pow(Ain.getEntry(c, s).abs(), 2);
+            }
+            AcolNorm[s] = sqrt(AcolNorm[s] + EPSILON);
+        }
+
+        for (int c = 0; c < nChannels; c++) {
+            for (int s = 0; s < nSrc; s++) {
+                Aout.multiplyEntry(c, s, Complex.ONE.divide(AcolNorm[s]));
+            }
+        }
+
+        return Aout;
+    }
+
+
+
+
+    private void runThisFreq(int f) {
+        //Log.i("DEBUG", "bin = " + f);
+
+        /* normalizing the columns of X */
+
+        Array2DRowFieldMatrix<Complex> X_bar = normalizeX(STFTwhite[f]);
+
+        /* Initializing mixing matrix */
+        Array2DRowFieldMatrix<Complex> A = randomInit();
 
         /* decouple the rows of A */
         if (isRowDecoupling) {
@@ -181,54 +199,43 @@ public class AbsCosSimSCA {
         }
 
         /* normalizing A */
-        double[] AcolNorm = new double[nSrc];
-
-        for (int s = 0; s < nSrc; s++) {
-            AcolNorm[s] = 0.0;
-            for (int c = 0; c < nChannels; c++) {
-                AcolNorm[s] += pow(A.getEntry(c, s).abs(), 2);
-            }
-            AcolNorm[s] = sqrt(AcolNorm[s] + EPSILON);
-        }
-
-        for (int c = 0; c < nChannels; c++) {
-            for (int s = 0; s < nSrc; s++) {
-                A.multiplyEntry(c, s, Complex.ONE.divide(AcolNorm[s]));
-            }
-        }
-
-        /* checking */
-        /*
-            double checkColNorm;
-            for (int t = 0; t < nFrames; t++) {
-                checkColNorm = 0.0;
-                for (int c = 0; c < nChannels; c++) {
-                    checkColNorm += pow(X_bar.getEntry(c, t).abs(), 2.0);
-                }
-                checkColNorm = sqrt(checkColNorm);
-                Log.i("DEBUG", "frame " + t + " norm = " + checkColNorm);
-            }
-        */
-
-        PowerMeanContrast contrast = new PowerMeanContrast(-0.5, isRowDecoupling);
+        A = normalizeA(A);
 
         if (derivCheck) {
             checkDerivative(A, X_bar);
         }
 
         /* Nesterov's accelerated gradient */
+        Array2DRowFieldMatrix<Complex> bestA = optimize(A, X_bar);
 
-        double cost = 0.0, prevCost = Double.POSITIVE_INFINITY, bestCost = Double.POSITIVE_INFINITY;
+        if (isRowDecoupling) {
+            ComplexSingularValueDecomposition csvd = new ComplexSingularValueDecomposition(bestA, true);
+            bestA = csvd.getU().multiply(csvd.getVH());
+        }
+
+        /* Normalizing bestA */
+        bestA = normalizeA(bestA);
+
+        Array2DRowFieldMatrix<Complex> finalAngle = transjugate(bestA).multiply(X_bar); // (nSrc by nChannels) * (nChannels by nFrames) = nSrc by nFrames
+
+        posteriorProb[f] = calculateMask(finalAngle).getData();
+    }
+
+    private Array2DRowFieldMatrix<Complex> optimize(Array2DRowFieldMatrix<Complex> A, Array2DRowFieldMatrix<Complex> X_bar){
+        double cost = 0.0;
+        double prevCost = Double.POSITIVE_INFINITY;
+        double bestCost = Double.POSITIVE_INFINITY;
         double opt_cond;
 
         Array2DRowFieldMatrix<Complex> grad;
         Array2DRowFieldMatrix<Complex> A_nag = (Array2DRowFieldMatrix<Complex>) A.copy();
         Array2DRowFieldMatrix<Complex> bestA = (Array2DRowFieldMatrix<Complex>) A.copy();
-        Array2DRowFieldMatrix<Complex> A_prev_nag, oldA; //, momentum;
-        //Complex complexRestart;
+        Array2DRowFieldMatrix<Complex> A_prev_nag, oldA, momentum;
+        Complex gamma, complexRestart;
 
         int counter = 1;
-        Complex gamma;
+
+        PowerMeanContrast contrast = new PowerMeanContrast(-0.5, isRowDecoupling);
 
         for (int iter = 0; iter < maxItr; iter++) {
             oldA = (Array2DRowFieldMatrix<Complex>) A.copy();
@@ -247,13 +254,13 @@ public class AbsCosSimSCA {
             A_nag = A.subtract((Array2DRowFieldMatrix<Complex>) grad.scalarMultiply(eta));
             A = (Array2DRowFieldMatrix<Complex>) (A_nag.scalarMultiply(Complex.ONE.add(gamma))).subtract(A_prev_nag.scalarMultiply(gamma));
 
-//            momentum = A_nag.subtract(A_prev);
-//            complexRestart = Complex.ZERO;
-//            for (int c = 0; c < nChannels; c++) {
-//                for (int s = 0; s < nSrc; s++) {
-//                    complexRestart.add(grad.getEntry(c, s).conjugate().multiply(momentum.getEntry(c, s)));
-//                }
-//            }
+            momentum = A_nag.subtract(A_prev_nag);
+            complexRestart = Complex.ZERO;
+            for (int c = 0; c < nChannels; c++) {
+                for (int s = 0; s < nSrc; s++) {
+                    complexRestart.add(grad.getEntry(c, s).conjugate().multiply(momentum.getEntry(c, s)));
+                }
+            }
 
             /* calculating opt_cond */
 
@@ -282,46 +289,20 @@ public class AbsCosSimSCA {
                 }
             }
 
-            counter++;
-
-            /*if (complexRestart.getReal() > 0) {
+            if (complexRestart.getReal() > 0) {
                 counter = 1;
-
                 A = (Array2DRowFieldMatrix<Complex>) A_nag.copy();
 
                 //Log.i("DEBUG", "freq " + f + " restarts at iter " + iter);
             } else {
                 counter++;
-            }*/
-        }
-
-//        Log.i("DEBUG", "Cost = " + bestCost);
-        //Log.i("DEBUG", "Counter = " + counter);
-
-        if (isRowDecoupling) {
-            ComplexSingularValueDecomposition csvd = new ComplexSingularValueDecomposition(bestA, true);
-            bestA = csvd.getU().multiply(csvd.getVH());
-        }
-
-        /* Normalizing bestA */
-
-        double[] bestAcolNorm = new double[nSrc];
-
-        for (int s = 0; s < nSrc; s++) {
-            bestAcolNorm[s] = 0.0;
-            for (int c = 0; c < nChannels; c++) {
-                bestAcolNorm[s] += pow(bestA.getEntry(c, s).abs(), 2);
-            }
-            bestAcolNorm[s] = sqrt(bestAcolNorm[s] + EPSILON);
-        }
-
-        for (int c = 0; c < nChannels; c++) {
-            for (int s = 0; s < nSrc; s++) {
-                bestA.multiplyEntry(c, s, Complex.ONE.divide(bestAcolNorm[s]));
             }
         }
 
-        Array2DRowFieldMatrix<Complex> finalAngle = transjugate(bestA).multiply(X_bar); // (nSrc by nChannels) * (nChannels by nFrames) = nSrc by nFrames
+        return bestA;
+    }
+
+    private Array2DRowRealMatrix calculateMask(Array2DRowFieldMatrix<Complex> finalAngle){
         Array2DRowRealMatrix cos2H = new Array2DRowRealMatrix(nSrc, nFrames);
 
         for (int s = 0; s < nSrc; s++) {
@@ -334,7 +315,6 @@ public class AbsCosSimSCA {
         Max max = new Max();
         for (int t = 0; t < nFrames; t++) {
             maxCos[t] = max.evaluate(cos2H.getColumn(t));
-            //Log.i("DEBUG","maxCos["+t+"] = " + maxCos[t]);
         }
 
         Array2DRowRealMatrix mask = new Array2DRowRealMatrix(nFrames, nSrc);
@@ -349,12 +329,9 @@ public class AbsCosSimSCA {
             for (int s = 0; s < nSrc; s++) {
                 mask.multiplyEntry(t, s, 1.0 / maskColSum[t]);
             }
-            /*
-            Log.i("DEBUG", "mask at t = " + t);
-            Log.i("DEBUG", Arrays.toString(mask.getRow(t)));*/
         }
 
-        posteriorProb[f] = mask.getData();
+        return  mask;
     }
 
     private void checkDerivative(Array2DRowFieldMatrix<Complex> A, Array2DRowFieldMatrix<Complex> X_bar) {
@@ -506,7 +483,7 @@ public class AbsCosSimSCA {
             this.isRowDecoupling = isRowDecoupling;
         }
 
-        void computeCost(Array2DRowFieldMatrix<Complex> A, Array2DRowFieldMatrix<Complex> X_bar) {
+        private void computeCost(Array2DRowFieldMatrix<Complex> A, Array2DRowFieldMatrix<Complex> X_bar) {
 
             nChannels = A.getRowDimension();
             nSrc = A.getColumnDimension();
@@ -627,11 +604,11 @@ public class AbsCosSimSCA {
             return grad;
         }
 
-        double getCost() {
+        private double getCost() {
             return cost;
         }
 
-        void contrast(Array2DRowRealMatrix Y2) {
+        private void contrast(Array2DRowRealMatrix Y2) {
             Array2DRowRealMatrix Y2_contra_mat = new Array2DRowRealMatrix(nSrc, nFrames);
             double[][] Y2_contra; // = new double[nFrames][nSrc]
             double[] Y2_contra_min = new double[nFrames];
@@ -747,6 +724,6 @@ public class AbsCosSimSCA {
     }
 
     public Complex[][][] getSourceEstimatesSTFT() {
-        return SerializationUtils.clone(STFTout);
+        return STFTout;
     }
 }

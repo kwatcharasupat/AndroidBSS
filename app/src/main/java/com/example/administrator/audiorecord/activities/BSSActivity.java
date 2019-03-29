@@ -19,8 +19,8 @@ import android.widget.Switch;
 import android.widget.TextView;
 
 import com.example.administrator.audiorecord.R;
-import com.example.administrator.audiorecord.audioprocessing.bss.AbsCosSimSCA;
-import com.example.administrator.audiorecord.audioprocessing.bss.AuxIVAParallel;
+import com.example.administrator.audiorecord.audioprocessing.bss.AuxIVA;
+import com.example.administrator.audiorecord.audioprocessing.bss.DirectionalSCA;
 import com.example.administrator.audiorecord.audioprocessing.bss.FastICA;
 import com.example.administrator.audiorecord.audioprocessing.commons.STFT;
 import com.example.administrator.audiorecord.audioprocessing.datahandler.AudioFileWriter;
@@ -76,7 +76,6 @@ public class BSSActivity extends AppCompatActivity implements AdapterView.OnItem
     SimpleDateFormat dateFormat;
     String datetimeSuffix;
 
-    long[] timeTaken;
 
     double averageTime;
 
@@ -97,8 +96,8 @@ public class BSSActivity extends AppCompatActivity implements AdapterView.OnItem
 
     /* for BSS */
 
-    AuxIVAParallel auxIVA = null;
-    AbsCosSimSCA sca = null;
+    AuxIVA auxIVA = null;
+    DirectionalSCA sca = null;
     FastICA fastIca = null;
 
     /* for data handling */
@@ -128,6 +127,9 @@ public class BSSActivity extends AppCompatActivity implements AdapterView.OnItem
     String[] Mixture2Src, Mixture3Src, Mixture4Src;
 
     /*------------*/
+
+    long startTime, endTime;
+    long[] bssTime, stftTime, istftTime;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -165,7 +167,9 @@ public class BSSActivity extends AppCompatActivity implements AdapterView.OnItem
                 progressBar.setText("BSS is already running");
             } else {
 
-                timeTaken = new long[100];
+                bssTime = new long[18];
+                stftTime = new long[18];
+                istftTime = new long[18];
                 //datetimeSuffix = dateFormat.format(new Date());
 
                 switch (bssType) {
@@ -261,7 +265,7 @@ public class BSSActivity extends AppCompatActivity implements AdapterView.OnItem
                     progressBar.setText("Playing back source " + (playbackSrc + 1)).show();
                     fabPlaySrc.setImageDrawable(ContextCompat.getDrawable(getApplicationContext(), R.drawable.ic_round_pause_24px));
 
-                    String filePath = getExternalStorageDirectory().getAbsolutePath() + File.separator + fileNameNoExt + "_Source" + (playbackSrc + 1) + ".pcm";
+                    String filePath = pcmFiles[playbackSrc].getAbsolutePath();
                     playbackThread = new Thread(new PlayRunnable(filePath), "Playback Thread");
                     playbackThread.start();
 
@@ -284,41 +288,49 @@ public class BSSActivity extends AppCompatActivity implements AdapterView.OnItem
     }
 
     private void prepFileNames() {
-        Mixture2Src = new String[45];
 
-        for (int i = 0; i < 15; i++) {
-            Mixture2Src[i] = "mixture_otd_2src_" + Integer.toString(i + 1);
-            Mixture2Src[15 + i] = "mixture_ofc_2src_" + Integer.toString(i + 1);
-            Mixture2Src[30 + i] = "mixture_lth_2src_" + Integer.toString(i + 1);
+        int[] dist = {50, 75, 100};
+
+        Mixture2Src = new String[18];
+
+        for (int i = 0; i < 2; i++) {
+            for (int j = 0; j < 3; j++) {
+                Mixture2Src[2 * j + i] = "mixture_otd_2src_combi" + Integer.toString(i + 1) + "_" + dist[j] + "cm";
+                Mixture2Src[2 * j + i + 6] = "mixture_ofc_2src_combi" + Integer.toString(i + 1) + "_" + dist[j] + "cm";
+                Mixture2Src[2 * j + i + 12] = "mixture_lth_2src_combi" + Integer.toString(i + 1) + "_" + dist[j] + "cm";
+            }
         }
 
-        Mixture4Src = new String[45];
+        Mixture3Src = new String[18];
 
-        for (int i = 0; i < 15; i++) {
-            Mixture4Src[i] = "mixture_otd_4src_" + Integer.toString(i + 1);
-            Mixture4Src[15 + i] = "mixture_ofc_4src_" + Integer.toString(i + 1);
-            Mixture4Src[30 + i] = "mixture_lth_4src_" + Integer.toString(i + 1);
+        for (int i = 0; i < 2; i++) {
+            for (int j = 0; j < 3; j++) {
+                Mixture3Src[2 * j + i] = "mixture_otd_3src_combi" + Integer.toString(i + 1) + "_" + dist[j] + "cm";
+                Mixture3Src[2 * j + i + 6] = "mixture_ofc_3src_combi" + Integer.toString(i + 1) + "_" + dist[j] + "cm";
+                Mixture3Src[2 * j + i + 12] = "mixture_lth_3src_combi" + Integer.toString(i + 1) + "_" + dist[j] + "cm";
+            }
         }
 
-        Mixture3Src = new String[60];
+        Mixture4Src = new String[18];
 
-        for (int i = 0; i < 20; i++) {
-            Mixture3Src[i] = "mixture_otd_3src_" + Integer.toString(i + 1);
-            Mixture3Src[20 + i] = "mixture_ofc_3src_" + Integer.toString(i + 1);
-            Mixture3Src[40 + i] = "mixture_lth_3src_" + Integer.toString(i + 1);
+        for (int i = 0; i < 2; i++) {
+            for (int j = 0; j < 3; j++) {
+                Mixture4Src[2 * j + i] = "mixture_otd_4src_combi" + Integer.toString(i + 1) + "_" + dist[j] + "cm";
+                Mixture4Src[2 * j + i + 6] = "mixture_ofc_4src_combi" + Integer.toString(i + 1) + "_" + dist[j] + "cm";
+                Mixture4Src[2 * j + i + 12] = "mixture_lth_4src_combi" + Integer.toString(i + 1) + "_" + dist[j] + "cm";
+            }
         }
-
     }
 
-    private void processTime() {
+    private void processTime(long[] timein, String type) {
 
-        double[] doubleTime = Arrays.stream(timeTaken).parallel().mapToDouble(i -> i / 1000.0).toArray();
+        double[] doubleTime = Arrays.stream(timein).parallel().mapToDouble(i -> i / 1000.0).toArray();
 
-        saveTimeLog(doubleTime);
+        saveTimeLog(doubleTime, type);
     }
 
-    void saveTimeLog(double[] print) {
-        String filename = "timeLog_" + bssString + "_" + dateFormat.format(new Date()) + ".csv";
+    void saveTimeLog(double[] print, String type) {
+        String filename = "timeLog_" + type + "_" + dateFormat.format(new Date()) + ".csv";
 
         File file = new File(getExternalStorageDirectory().getAbsolutePath() + File.separator + filename);
 
@@ -349,14 +361,13 @@ public class BSSActivity extends AppCompatActivity implements AdapterView.OnItem
                 nSrc = nChannels;
             }
 
-            for (int i = 0; i < 45; i++) {
-
-                Log.i("DEBUG", "Separating " + Mixture2Src[i]);
+            for (int i = 0; i < 18; i++) {
 
                 runOnUiThread(() -> {
                     progressBar.setText("Reading file").show();
                 });
 
+                Log.i("DEBUG", "Separating " + Mixture2Src[i]);
                 fileName = Mixture2Src[i] + ".pcm";
                 fileNameNoExt = Mixture2Src[i];
                 file = new File(getExternalStorageDirectory().getAbsolutePath(), fileName);
@@ -374,27 +385,43 @@ public class BSSActivity extends AppCompatActivity implements AdapterView.OnItem
                         progressBar.setText("Running STFT").show();
                     });
 
+                    System.gc();
+                    startTime = System.currentTimeMillis();
                     runSTFT(false);
+                    endTime = System.currentTimeMillis();
+                    System.gc();
+                    stftTime[i] = endTime - startTime;
 
                     runOnUiThread(() -> {
                         progressBar.setDuration(Snackbar.LENGTH_INDEFINITE).setText("Separating sources").show();
                     });
-                    long startTime = System.currentTimeMillis();
+                    System.gc();
+                    startTime = System.currentTimeMillis();
                     runAuxIVA();
-                    long endTime = System.currentTimeMillis();
-
-                    timeTaken[i] = endTime - startTime;
+                    endTime = System.currentTimeMillis();
+                    System.gc();
+                    bssTime[i] = endTime - startTime;
 
                     runOnUiThread(() -> {
                         progressBar.setDuration(Snackbar.LENGTH_SHORT).setText("Reconstructing sources").show();
                     });
 
+                    System.gc();
+                    startTime = System.currentTimeMillis();
                     runISTFT(false);
+                    endTime = System.currentTimeMillis();
+                    System.gc();
+                    istftTime[i] = endTime - startTime;
+
                     sourcesToPCM();
                     pcmToWav(); //for testing only
 
                 }
             }
+
+            processTime(stftTime, "stft");
+            processTime(istftTime, "istft");
+            processTime(bssTime, "auxiva");
 
             isBssRunning.set(false);
             isBssCompleted.set(true);
@@ -403,41 +430,38 @@ public class BSSActivity extends AppCompatActivity implements AdapterView.OnItem
                 progressBar.setText("AuxIVA completed").show();
             });
 
-            processTime();
         }
     }
 
     private void runAuxIVA() {
 
-        int nItr = 50;
+        int nItr = 100;
         double[] cFuncParam = new double[2];
         cFuncParam[0] = 1.0;
         cFuncParam[1] = 1.0;
 
         demixedSTFT = new Complex[nChannels][nFrames][nFreqs];
 
-        auxIVA = new AuxIVAParallel(obsSTFT, nItr, true, null, "norm", cFuncParam);
+        auxIVA = new AuxIVA(obsSTFT, nItr, true, null, "norm", cFuncParam);
 
         auxIVA.run();
 
         demixedSTFT = auxIVA.getSourceEstimatesSTFT();
-
     }
 
     private class ScaThread implements Runnable {
         @Override
         public void run() {
 
-            for (int i = 0; i < 45; i++) {
-
-                Log.i("DEBUG", "Separating " + Mixture4Src[i]);
+            for (int i = 0; i < 18; i++) {
 
                 runOnUiThread(() -> {
                     progressBar.setText("Reading file").show();
                 });
 
-                fileName = Mixture4Src[i] + ".pcm";
-                fileNameNoExt = Mixture4Src[i];
+                Log.i("DEBUG", "Separating " + Mixture3Src[i]);
+                fileName = Mixture3Src[i] + ".pcm";
+                fileNameNoExt = Mixture3Src[i];
                 file = new File(getExternalStorageDirectory().getAbsolutePath(), fileName);
 
                 readPCM();
@@ -454,17 +478,24 @@ public class BSSActivity extends AppCompatActivity implements AdapterView.OnItem
                         progressBar.setText("Running STFT").show();
                     });
 
+                    System.gc();
+                    startTime = System.currentTimeMillis();
                     runSTFT(false);
+                    endTime = System.currentTimeMillis();
+                    System.gc();
+                    stftTime[i] = endTime - startTime;
 
                     runOnUiThread(() -> {
                         progressBar.setDuration(Snackbar.LENGTH_INDEFINITE).setText("Separating sources").show();
                     });
 
                     //startMethodTracingSampling("SCAnew2", 2147483647, 1);
-                    long startTime = System.currentTimeMillis();
+                    System.gc();
+                    startTime = System.currentTimeMillis();
                     runSCA();
-                    long endTime = System.currentTimeMillis();
-                    timeTaken[i] = endTime - startTime;
+                    endTime = System.currentTimeMillis();
+                    System.gc();
+                    bssTime[i] = endTime - startTime;
                     //stopMethodTracing();
 
                     Log.i("DEBUG", "SCA Completed");
@@ -473,14 +504,21 @@ public class BSSActivity extends AppCompatActivity implements AdapterView.OnItem
                         progressBar.setDuration(Snackbar.LENGTH_SHORT).setText("Reconstructing sources").show();
                     });
 
+                    System.gc();
+                    startTime = System.currentTimeMillis();
                     runISTFT(false);
+                    endTime = System.currentTimeMillis();
+                    System.gc();
+                    istftTime[i] = endTime - startTime;
+
                     sourcesToPCM();
                     pcmToWav(); //for testing only
                 }
             }
 
-            processTime();
-
+            processTime(stftTime, "stft");
+            processTime(istftTime, "istft");
+            processTime(bssTime, "sca");
 
             isBssRunning.set(false);
             isBssCompleted.set(true);
@@ -490,6 +528,7 @@ public class BSSActivity extends AppCompatActivity implements AdapterView.OnItem
                 getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
             });
         }
+
     }
 
     private void runSCA() {
@@ -516,9 +555,9 @@ public class BSSActivity extends AppCompatActivity implements AdapterView.OnItem
                 }
             }
 
-            sca = new AbsCosSimSCA(testSTFTarray, nItr, true, 3, 1e-2, true, false);
+            sca = new DirectionalSCA(testSTFTarray, nItr, true, 3, 1e-2, true, false);
         } else {*/
-        sca = new AbsCosSimSCA(obsSTFT, maxItr, nSrc, eta, isDerivCheck, isRowDecoupling);
+        sca = new DirectionalSCA(obsSTFT, maxItr, nSrc, eta, isDerivCheck, isRowDecoupling);
 
         sca.run();
 
@@ -529,7 +568,7 @@ public class BSSActivity extends AppCompatActivity implements AdapterView.OnItem
         @Override
         public void run() {
 
-            for (int i = 11; i < 12; i++) {
+            for (int i = 0; i < 18; i++) {
 
                 Log.i("DEBUG", "Separating " + Mixture2Src[i]);
 
@@ -554,17 +593,22 @@ public class BSSActivity extends AppCompatActivity implements AdapterView.OnItem
                         progressBar.setText("Running STFT").show();
                     });
 
-                    runSTFT(true);
+                    System.gc();
+                    startTime = System.currentTimeMillis();
+                    runSTFT(false);
+                    endTime = System.currentTimeMillis();
+                    System.gc();
+                    stftTime[i] = endTime - startTime;
 
                     runOnUiThread(() -> {
                         progressBar.setDuration(Snackbar.LENGTH_INDEFINITE).setText("Separating sources").show();
                     });
 
                     //startMethodTracingSampling("SCAnew2", 2147483647, 1);
-                    long startTime = System.currentTimeMillis();
+                    startTime = System.currentTimeMillis();
                     runFastICA();
-                    long endTime = System.currentTimeMillis();
-                    timeTaken[i] = endTime - startTime;
+                    endTime = System.currentTimeMillis();
+                    bssTime[i] = endTime - startTime;
                     //stopMethodTracing();
 
                     Log.i("DEBUG", "FastICA Completed");
@@ -573,23 +617,31 @@ public class BSSActivity extends AppCompatActivity implements AdapterView.OnItem
                         progressBar.setDuration(Snackbar.LENGTH_SHORT).setText("Reconstructing sources").show();
                     });
 
-                    runISTFT(true);
+                    System.gc();
+                    startTime = System.currentTimeMillis();
+                    runISTFT(false);
+                    endTime = System.currentTimeMillis();
+                    System.gc();
+                    istftTime[i] = endTime - startTime;
                     sourcesToPCM();
                     pcmToWav(); //for testing only
 
 
                 }
-
-                processTime();
-
-                isBssRunning.set(false);
-                isBssCompleted.set(true);
-
-                runOnUiThread(() -> {
-                    progressBar.setText("SCA completed").show();
-                    getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-                });
             }
+
+            processTime(stftTime, "stft");
+            processTime(istftTime, "istft");
+            processTime(bssTime, "ica");
+
+            isBssRunning.set(false);
+            isBssCompleted.set(true);
+
+            runOnUiThread(() -> {
+                progressBar.setText("SCA completed").show();
+                getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+            });
+
         }
     }
 
@@ -1059,14 +1111,13 @@ public class BSSActivity extends AppCompatActivity implements AdapterView.OnItem
                         .setAction("Action", null).show();
 
                 switch (bssType) {
-                    case AuxIVAIndex:
-                        setBssSrcSpinnerInvisible();
-                        break;
                     case SCAIndex:
                         setBssSrcSpinnerVisible();
                         break;
+                    default:
+                        setBssSrcSpinnerInvisible();
+                        break;
                 }
-
 
                 break;
             case R.id.spinnerPlaybackSrc:

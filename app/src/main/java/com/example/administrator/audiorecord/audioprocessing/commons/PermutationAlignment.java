@@ -103,9 +103,9 @@ public class PermutationAlignment {
                 for (int t = 0; t < nFrames; t++) {
                     for (int s = 0; s < nSrc; s++) {
                         //f_group2[s][t] = 0.0;
-                            for (int f : group2idx) {
-                                f_group2[s][t] += Pnorm[f][t][s];
-                            }
+                        for (int f : group2idx) {
+                            f_group2[s][t] += Pnorm[f][t][s];
+                        }
                         f_group2[s][t] = f_group2[s][t] / (double) group2idx.length;
                     }
                 }
@@ -192,9 +192,15 @@ public class PermutationAlignment {
 
             //int additionalIter = 0;
 
+            double[][][] oldPnorm = new double[nFreqs][nFrames][nSrc];
+
             for (int iter = 0; iter < maxItr; iter++) {
                 //Log.i("DEBUG", "Fine tuning iter " + iter);
-                double[][][] oldPnorm = SerializationUtils.clone(Pnorm);
+                IntStream.range(1, nFreqs).parallel().forEach(f -> {
+                    for (int t = 0; t < nFrames; t++) {
+                        System.arraycopy(Pnorm[f][t], 0, oldPnorm[f][t], 0, nSrc);
+                    }
+                });
 
                 IntStream.range(1, nFreqs).parallel().forEach(f -> { //.map(f -> nFreqs - f) || no difference since we are using oldPnorm
                     //Log.i("DEBUG", "f = " + f);
@@ -305,7 +311,9 @@ public class PermutationAlignment {
             }
         });
 
-        P[0] = SerializationUtils.clone(tempP);
+        for (int t = 0; t < nFrames; t++) {
+            System.arraycopy(tempP[t], 0, P[0][t], 0, nSrc);
+        }
     }
 
     public double[][][] getP() {
@@ -327,8 +335,13 @@ public class PermutationAlignment {
                 }
             }
 
-            P[f] = SerializationUtils.clone(tempP);
-            Pnorm[f] = SerializationUtils.clone(tempPnorm);
+            for (int t = 0; t < nFrames; t++) {
+                System.arraycopy(tempP[t], 0, P[f][t], 0, nSrc);
+            }
+
+            for (int t = 0; t < nFrames; t++) {
+                System.arraycopy(tempPnorm[t], 0, Pnorm[f][t], 0, nSrc);
+            }
         }
     }
 
@@ -346,44 +359,13 @@ public class PermutationAlignment {
             }
         }
 
-        P[f] = SerializationUtils.clone(tempP);
-        Pnorm[f] = SerializationUtils.clone(tempPnorm);
+        for (int t = 0; t < nFrames; t++) {
+            System.arraycopy(tempP[t], 0, P[f][t], 0, nSrc);
+        }
+
+        for (int t = 0; t < nFrames; t++) {
+            System.arraycopy(tempPnorm[t], 0, Pnorm[f][t], 0, nSrc);
+        }
     }
-
-    /*private synchronized int[] performLAPJV (Array2DRowRealMatrix Qmat){
-
-        double[] cc = new double[nSrc*nSrc];
-        int[] kk = new int[nSrc*nSrc];
-        int[] nInEachRow = new int[nSrc];
-
-        for(int si = 0; si < nSrc; si++){
-            for(int sj = 0; sj < nSrc; sj++){
-                cc[si*nSrc + sj] = Qmat.getEntry(si,sj);
-            }
-        }
-
-        for(int ss = 0; ss < nSrc*nSrc; ss++){
-            kk[ss] = ss%3;
-        }
-
-        for(int s = 0; s < nSrc; s++){
-            nInEachRow[s] = nSrc;
-        }
-
-        SparseCostMatrix Qcm = new SparseCostMatrix(cc,kk,nInEachRow,nSrc);
-
-        LAPJV lapjv = new LAPJV(Qcm);
-        int[] out;
-        boolean isSuccess = lapjv.process();
-
-        if(isSuccess){
-            out = lapjv.getResult();
-            return out;
-        } else {
-            out = IntStream.range(0,nSrc).toArray(); //keep same order
-            return out;
-        }
-    }*/
-
 
 }

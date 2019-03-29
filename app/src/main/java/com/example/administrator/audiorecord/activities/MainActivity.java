@@ -22,12 +22,14 @@ import android.widget.Switch;
 import com.example.administrator.audiorecord.R;
 import com.example.administrator.audiorecord.audioprocessing.datahandler.AudioFileWriter;
 
+import java.io.DataInputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
@@ -59,7 +61,7 @@ public class MainActivity extends AppCompatActivity {
 
     private final AtomicBoolean isTestMode = new AtomicBoolean(false);
 
-    String fileName, fileNameNoExt;
+    String fileName = null, fileNameNoExt;
 
     FloatingActionButton fabRecord, fabPlay, fabStop, fabSave;
 
@@ -118,15 +120,20 @@ public class MainActivity extends AppCompatActivity {
 
 
         fabPlay.setOnClickListener(view -> {
-            if (isPlayingBack.get()) {
-                Snackbar.make(view, "Playback paused", Snackbar.LENGTH_SHORT).show();
-                fabPlay.setImageDrawable(ContextCompat.getDrawable(getApplicationContext(), R.drawable.ic_round_play_arrow_24px));
-                pausePlayback();
-            } else {
+            if(audioTrack == null || audioTrack.getPlayState() == AudioTrack.PLAYSTATE_STOPPED){
                 Snackbar.make(view, "Playing back", Snackbar.LENGTH_SHORT).show();
                 fabPlay.setImageDrawable(ContextCompat.getDrawable(getApplicationContext(), R.drawable.ic_round_pause_24px));
                 startPlayback();
                 fabStop.setEnabled(true);
+            } else if (audioTrack.getPlayState() == AudioTrack.PLAYSTATE_PAUSED){
+                Snackbar.make(view, "Playing back", Snackbar.LENGTH_SHORT).show();
+                fabPlay.setImageDrawable(ContextCompat.getDrawable(getApplicationContext(), R.drawable.ic_round_pause_24px));
+                resumePlayback();
+                fabStop.setEnabled(true);
+            } else if (audioTrack.getPlayState() == AudioTrack.PLAYSTATE_PLAYING){
+                Snackbar.make(view, "Playback paused", Snackbar.LENGTH_SHORT).show();
+                fabPlay.setImageDrawable(ContextCompat.getDrawable(getApplicationContext(), R.drawable.ic_round_play_arrow_24px));
+                pausePlayback();
             }
         });
 
@@ -144,6 +151,8 @@ public class MainActivity extends AppCompatActivity {
             saveWavFile();
         });
     }
+
+
 
     private void saveWavFile() {
         saveThread = new Thread(new SaveRunnable(), "Saving WAV File Thread");
@@ -192,10 +201,15 @@ public class MainActivity extends AppCompatActivity {
         audioTrack.pause();
     }
 
+    private void resumePlayback() {
+        audioTrack.play();
+    }
+
     private void stopPlayback() {
 
         if (audioTrack.getPlayState() != AudioTrack.PLAYSTATE_STOPPED) {
             audioTrack.stop();
+
         }
 
         playbackThread.interrupt();
@@ -267,8 +281,12 @@ public class MainActivity extends AppCompatActivity {
                 return;
             }
 
+            File file;
+            file = new File(filePath);
 
-            int intSize = android.media.AudioTrack.getMinBufferSize(
+            int intSize = (int) file.length();
+
+                    android.media.AudioTrack.getMinBufferSize(
                     SAMPLING_RATE_IN_HZ,
                     AudioFormat.CHANNEL_OUT_STEREO,
                     AudioFormat.ENCODING_PCM_16BIT);
@@ -283,53 +301,70 @@ public class MainActivity extends AppCompatActivity {
                             .setSampleRate(SAMPLING_RATE_IN_HZ)
                             .setChannelMask(AudioFormat.CHANNEL_OUT_STEREO)
                             .build())
+                    .setTransferMode(AudioTrack.MODE_STATIC)
                     .setBufferSizeInBytes(intSize)
                     .build();
 
             int count = 512 * 1024; // 512 kb
 
-            byte[] byteData;
-            File file;
-            file = new File(filePath);
-
-            byteData = new byte[count];
-            FileInputStream in = null;
             try {
-                in = new FileInputStream(file);
-            } catch (FileNotFoundException e) {
-                e.printStackTrace();
-            }
-
-            int bytesread = 0, ret = 0;
-            int size = (int) file.length();
-            audioTrack.play();
-            while (bytesread < size) {
-                try {
-                    assert in != null;
-                    ret = in.read(byteData, 0, count);
-                } catch (IOException e) {
-                    e.printStackTrace();
+                if (file == null) {
+                    Log.e("DEBUG", "File pointer is null!");
+                    return;
+                } else {
+                    Log.i("DEBUG", "File pointer is not null");
                 }
 
-                if (ret != -1) { // Write the byte array to the track
-                    audioTrack.write(byteData, 0, ret);
-                    bytesread += ret;
-                } else break;
-            }
+                int sizeInShorts = (int) (file.length() / 2);
+                FileInputStream inputStream = new FileInputStream(file);
+                //Log.i("DEBUG", "inputStream has been created.");
 
-            try {
-                assert in != null;
-                in.close();
+                DataInputStream dataInputStream = new DataInputStream(inputStream);
+                //Log.i("DEBUG", "dataInputStream has been created.");
+
+                short[] shortData = new short[sizeInShorts];  // very impt to allocate memory to the array
+                //Log.i("DEBUG", "Memory has been allocated for shortData array.");
+
+                for (int i = 0; i < sizeInShorts; i++) {
+                    byte[] bytes = new byte[2];
+                    bytes[0] = dataInputStream.readByte();
+                    bytes[1] = dataInputStream.readByte();
+                    ByteBuffer buffer = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN);
+                    short result = buffer.getShort();
+                    shortData[i] = result;
+                }
+
+                audioTrack.write(shortData, 0, sizeInShorts);
+                audioTrack.setNotificationMarkerPosition(sizeInShorts/2);
+
+            } catch (FileNotFoundException e) {
+                Log.e("File not found", "" + e);
             } catch (IOException e) {
                 e.printStackTrace();
             }
-            audioTrack.pause();
-            audioTrack.flush();
-            audioTrack.release();
 
-            isPlayingBack.set(false);
-            fabPlay.setImageDrawable(ContextCompat.getDrawable(getApplicationContext(), R.drawable.ic_round_play_arrow_24px));
-            runOnUiThread(() -> fabStop.setEnabled(false));
+
+            audioTrack.setPlaybackPositionUpdateListener(new AudioTrack.OnPlaybackPositionUpdateListener(){
+
+                @Override
+                public void onMarkerReached(AudioTrack arg0) {
+                    runOnUiThread(() -> {
+                        fabPlay.setImageDrawable(ContextCompat.getDrawable(getApplicationContext(), R.drawable.ic_round_play_arrow_24px));
+                        fabStop.setEnabled(false);
+                    });
+                }
+
+                @Override
+                public void onPeriodicNotification(AudioTrack arg0) {
+
+                }
+
+            });
+
+            Log.i("DEBUG", "time before = " + System.currentTimeMillis());
+            audioTrack.play();
+            Log.i("DEBUG", "time after = " + System.currentTimeMillis());
+
             Log.i("DEBUG", "Playback ended");
         }
     }
@@ -497,6 +532,11 @@ public class MainActivity extends AppCompatActivity {
     }
 
     public void launchBssActivity(View view) {
+
+        if(fileName == null){
+            Snackbar.make(findViewById(R.id.fabRecord), "No recording has been made yet", Snackbar.LENGTH_SHORT).show();
+        }
+
 
         Log.i("DEBUG", "Launching next activity");
 

@@ -109,7 +109,4 @@ public class Whitening {
         return out;
     }
 
-    public Array2DRowFieldMatrix<Complex>[] getQ_PCA() {
-        return SerializationUtils.clone(Q_PCA);
-    }
 }

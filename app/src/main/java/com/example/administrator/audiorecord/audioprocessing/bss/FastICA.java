@@ -256,7 +256,7 @@ public class FastICA {
     }
 
     public Complex[][][] getSourceEstimatesSTFT() {
-        return SerializationUtils.clone(STFTout);
+        return STFTout;
     }
 
     public Array2DRowFieldMatrix<Complex> elementwiseMultiply(Array2DRowFieldMatrix<Complex> A, Array2DRowFieldMatrix<Complex> B) {
