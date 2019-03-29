@@ -10,3 +10,4 @@
 /captures
 .externalNativeBuild
 app/src/main/res/raw/credential.json
+app/src/main/res/raw/desktop.ini
