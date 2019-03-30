@@ -30,7 +30,6 @@ public class FastICA {
 
     private final double EPSILON = 1e-8;
 
-    private final double OPTIMUM_TOLERANCE = 1e-9;
     private final double PROGRESS_TOLERANCE = 1e-9;
 
     private Array2DRowFieldMatrix<Complex>[] STFTwhite;
@@ -109,42 +108,18 @@ public class FastICA {
         STFTout is nFreq by nChannels by nFrames to simplify further calculations
         */
 
-        /*if (derivCheck) {
-
-            Complex[][][] STFT = new Complex[nFreqs][nChannels][nFrames];
-
-            for (int c = 0; c < nChannels; c++) {
-                for (int t = 0; t < nFrames; t++) {
-                    for (int f = 0; f < nFreqs; f++) {
-                        STFT[f][c][t] = STFTin[c][t][f];
-                    }
-                }
-            }
-
-            for (int f = 0; f < nFreqs; f++) {
-                STFTwhite[f] = new Array2DRowFieldMatrix<>(STFT[f]);
-            }
-
-        } else {*/
         Whitening whitening = new Whitening(STFTin);
         whitening.run();
         STFTwhite = whitening.getWhitenedMatrixArray(); // nFreqs x (nChannels x nFrames)
     }
 
-    private void runThisFreq(int f) {
+    private Array2DRowFieldMatrix<Complex> normalizeX(Array2DRowFieldMatrix<Complex> X) {
 
-        //Log.i("DEBUG", "bin = " + f);
-
-        /* normalizing the columns of X */
-
-        Array2DRowFieldMatrix<Complex> X_bar = (Array2DRowFieldMatrix<Complex>) STFTwhite[f].copy();
-
-        //Log.i("DEBUG", "X = " + X_bar);
+        Array2DRowFieldMatrix<Complex> X_bar = (Array2DRowFieldMatrix<Complex>) X.copy();
 
         double colNorm;
 
         for (int t = 0; t < nFrames; t++) {
-
             colNorm = 0.0;
 
             for (int c = 0; c < nChannels; c++) {
@@ -158,7 +133,10 @@ public class FastICA {
             }
         }
 
-        /* Initializing mixing matrix */
+        return X_bar;
+    }
+
+    private Array2DRowFieldMatrix<Complex> randomInit() {
 
         Complex[][] randomInit = new Complex[nChannels][nSrc];
 
@@ -168,7 +146,12 @@ public class FastICA {
             }
         }
 
-        Array2DRowFieldMatrix<Complex> A = new Array2DRowFieldMatrix<>(randomInit);
+        return new Array2DRowFieldMatrix<>(randomInit);
+    }
+
+    private void runThisFreq(int f) {
+        Array2DRowFieldMatrix<Complex> X_bar = normalizeX(STFTwhite[f]);
+        Array2DRowFieldMatrix<Complex> A = randomInit();
 
 
         Array2DRowFieldMatrix<Complex> cov = (Array2DRowFieldMatrix<Complex>) X_bar.multiply(transjugate(X_bar)).scalarMultiply(Complex.ONE.divide(nFrames));
@@ -215,6 +198,11 @@ public class FastICA {
         }
 
         Array2DRowFieldMatrix<Complex> finalAngle = transjugate(A).multiply(X_bar); // (nSrc by nChannels) * (nChannels by nFrames)
+
+        posteriorProb[f] = calculateMask(finalAngle).getData();
+    }
+
+    private Array2DRowRealMatrix calculateMask(Array2DRowFieldMatrix<Complex> finalAngle) {
         Array2DRowRealMatrix cos2H = new Array2DRowRealMatrix(nSrc, nFrames);
 
         for (int s = 0; s < nSrc; s++) {
@@ -224,11 +212,9 @@ public class FastICA {
         }
 
         double[] maxCos = new double[nFrames];
-
         Max max = new Max();
-
         for (int t = 0; t < nFrames; t++) {
-            maxCos[t] = max.evaluate(cos2H.getColumn(t), 0, nSrc);
+            maxCos[t] = max.evaluate(cos2H.getColumn(t));
         }
 
         Array2DRowRealMatrix mask = new Array2DRowRealMatrix(nFrames, nSrc);
@@ -240,20 +226,14 @@ public class FastICA {
                 mask.setEntry(t, s, exp(beta * (cos2H.getEntry(s, t) - maxCos[t])));
                 maskColSum[t] += mask.getEntry(t, s);
             }
-            /*
-            Log.i("DEBUG", "mask at t = " + t);
-            Log.i("DEBUG", Arrays.toString(mask.getRow(t)));*/
-        }
-
-        for (int t = 0; t < nFrames; t++) {
             for (int s = 0; s < nSrc; s++) {
-                mask.multiplyEntry(t, s, 1.0 / (maskColSum[t] + EPSILON));
+                mask.multiplyEntry(t, s, 1.0 / maskColSum[t]);
             }
         }
 
-
-        posteriorProb[f] = SerializationUtils.clone(mask.getData());
+        return mask;
     }
+
 
     public Complex[][][] getSourceEstimatesSTFT() {
         return STFTout;

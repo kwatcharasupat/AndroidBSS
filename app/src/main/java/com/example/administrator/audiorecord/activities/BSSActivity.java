@@ -295,9 +295,9 @@ public class BSSActivity extends AppCompatActivity implements AdapterView.OnItem
 
         for (int i = 0; i < 2; i++) {
             for (int j = 0; j < 3; j++) {
-                Mixture2Src[2 * j + i] = "mixture_otd_2src_combi" + Integer.toString(i + 1) + "_" + dist[j] + "cm";
-                Mixture2Src[2 * j + i + 6] = "mixture_ofc_2src_combi" + Integer.toString(i + 1) + "_" + dist[j] + "cm";
-                Mixture2Src[2 * j + i + 12] = "mixture_lth_2src_combi" + Integer.toString(i + 1) + "_" + dist[j] + "cm";
+                Mixture2Src[2 * j + i] = "mixture_otd_2src_combi" + Integer.toString(i + 3) + "_" + dist[j] + "cm";//0 to 5
+                Mixture2Src[2 * j + i + 6] = "mixture_ofc_2src_combi" + Integer.toString(i + 3) + "_" + dist[j] + "cm";
+                Mixture2Src[2 * j + i + 12] = "mixture_lth_2src_combi" + Integer.toString(i + 3) + "_" + dist[j] + "cm";
             }
         }
 
@@ -305,9 +305,9 @@ public class BSSActivity extends AppCompatActivity implements AdapterView.OnItem
 
         for (int i = 0; i < 2; i++) {
             for (int j = 0; j < 3; j++) {
-                Mixture3Src[2 * j + i] = "mixture_otd_3src_combi" + Integer.toString(i + 1) + "_" + dist[j] + "cm";
-                Mixture3Src[2 * j + i + 6] = "mixture_ofc_3src_combi" + Integer.toString(i + 1) + "_" + dist[j] + "cm";
-                Mixture3Src[2 * j + i + 12] = "mixture_lth_3src_combi" + Integer.toString(i + 1) + "_" + dist[j] + "cm";
+                Mixture3Src[2 * j + i] = "mixture_otd_3src_combi" + Integer.toString(i + 3) + "_" + dist[j] + "cm";
+                Mixture3Src[2 * j + i + 6] = "mixture_ofc_3src_combi" + Integer.toString(i + 3) + "_" + dist[j] + "cm";
+                Mixture3Src[2 * j + i + 12] = "mixture_lth_3src_combi" + Integer.toString(i + 3) + "_" + dist[j] + "cm";
             }
         }
 
@@ -315,9 +315,9 @@ public class BSSActivity extends AppCompatActivity implements AdapterView.OnItem
 
         for (int i = 0; i < 2; i++) {
             for (int j = 0; j < 3; j++) {
-                Mixture4Src[2 * j + i] = "mixture_otd_4src_combi" + Integer.toString(i + 1) + "_" + dist[j] + "cm";
-                Mixture4Src[2 * j + i + 6] = "mixture_ofc_4src_combi" + Integer.toString(i + 1) + "_" + dist[j] + "cm";
-                Mixture4Src[2 * j + i + 12] = "mixture_lth_4src_combi" + Integer.toString(i + 1) + "_" + dist[j] + "cm";
+                Mixture4Src[2 * j + i] = "mixture_otd_4src_combi" + Integer.toString(i + 3) + "_" + dist[j] + "cm";
+                Mixture4Src[2 * j + i + 6] = "mixture_ofc_4src_combi" + Integer.toString(i + 3) + "_" + dist[j] + "cm";
+                Mixture4Src[2 * j + i + 12] = "mixture_lth_4src_combi" + Integer.toString(i + 3) + "_" + dist[j] + "cm";
             }
         }
     }

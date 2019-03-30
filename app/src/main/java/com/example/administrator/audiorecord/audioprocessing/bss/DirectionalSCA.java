@@ -96,9 +96,7 @@ public class DirectionalSCA {
         IntStream.range(0, nFreqs).parallel().forEach(f -> {
             for (int t = 0; t < nFrames; t++) {
                 for (int s = 0; s < nSrc; s++) {
-                    synchronized (STFTin) {
                         STFTout[s][t][f] = STFTin[0][t][f].multiply(P[f][t][s]);
-                    }
                 }
             }
         });
@@ -120,7 +118,7 @@ public class DirectionalSCA {
     }
 
 
-    private Array2DRowFieldMatrix<Complex> normalizeX(Array2DRowFieldMatrix<Complex> X){
+    private Array2DRowFieldMatrix<Complex> normalizeX(Array2DRowFieldMatrix<Complex> X) {
 
         Array2DRowFieldMatrix<Complex> X_bar = (Array2DRowFieldMatrix<Complex>) X.copy();
 
@@ -143,7 +141,7 @@ public class DirectionalSCA {
         return X_bar;
     }
 
-    private Array2DRowFieldMatrix<Complex> randomInit(){
+    private Array2DRowFieldMatrix<Complex> randomInit() {
 
         Complex[][] randomInit = new Complex[nChannels][nSrc];
 
@@ -156,7 +154,7 @@ public class DirectionalSCA {
         return new Array2DRowFieldMatrix<>(randomInit);
     }
 
-    private Array2DRowFieldMatrix<Complex> normalizeA(Array2DRowFieldMatrix<Complex> Ain){
+    private Array2DRowFieldMatrix<Complex> normalizeA(Array2DRowFieldMatrix<Complex> Ain) {
 
         Array2DRowFieldMatrix<Complex> Aout = (Array2DRowFieldMatrix<Complex>) Ain.copy();
 
@@ -178,8 +176,6 @@ public class DirectionalSCA {
 
         return Aout;
     }
-
-
 
 
     private void runThisFreq(int f) {
@@ -221,7 +217,7 @@ public class DirectionalSCA {
         posteriorProb[f] = calculateMask(finalAngle).getData();
     }
 
-    private Array2DRowFieldMatrix<Complex> optimize(Array2DRowFieldMatrix<Complex> A, Array2DRowFieldMatrix<Complex> X_bar){
+    private Array2DRowFieldMatrix<Complex> optimize(Array2DRowFieldMatrix<Complex> A, Array2DRowFieldMatrix<Complex> X_bar) {
         double cost = 0.0;
         double prevCost = Double.POSITIVE_INFINITY;
         double bestCost = Double.POSITIVE_INFINITY;
@@ -302,7 +298,7 @@ public class DirectionalSCA {
         return bestA;
     }
 
-    private Array2DRowRealMatrix calculateMask(Array2DRowFieldMatrix<Complex> finalAngle){
+    private Array2DRowRealMatrix calculateMask(Array2DRowFieldMatrix<Complex> finalAngle) {
         Array2DRowRealMatrix cos2H = new Array2DRowRealMatrix(nSrc, nFrames);
 
         for (int s = 0; s < nSrc; s++) {
@@ -331,7 +327,7 @@ public class DirectionalSCA {
             }
         }
 
-        return  mask;
+        return mask;
     }
 
     private void checkDerivative(Array2DRowFieldMatrix<Complex> A, Array2DRowFieldMatrix<Complex> X_bar) {
@@ -600,7 +596,7 @@ public class DirectionalSCA {
             }
         }
 
-        Array2DRowFieldMatrix<Complex> getGrad() {
+        private Array2DRowFieldMatrix<Complex> getGrad() {
             return grad;
         }
 
@@ -633,9 +629,7 @@ public class DirectionalSCA {
                 colMin = min.evaluate(thisCol);
                 colZeroIdx[t] = ArrayUtils.indexOf(thisCol, 0.0); //returns -1 if there is no zero
 
-                if (isrNegInf) {
-                    colMinIdx[t] = ArrayUtils.indexOf(thisCol, colMin);
-                }
+                if (isrNegInf) colMinIdx[t] = ArrayUtils.indexOf(thisCol, colMin);
 
                 Y2_contra_min[t] = colMin;
             }
