@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">AudioRecord</string>
+    <string name="app_name">Android BSS</string>
     <string name="stop">Stop</string>
     <string name="start_recording">Start Recording</string>
     <string name="play_recorded_audio">Play Audio</string>
@@ -21,17 +21,16 @@
     <string name="this_is_auxiva">This is AuxIVA</string>
     <string name="run_auxiva">Run AuxIVA</string>
     <string name="reconstruct_signal">reconstruct signal</string>
-
     <string-array name="bss_options">
-        <item>AuxIVA</item>
         <item>SCA</item>
         <item>FastICA</item>
+        <item>AuxIVA</item>
     </string-array>
     <string name="title_activity_main">MainActivity</string>
     <string name="choose_the_source_to_listen_to">Choose the source to listen to</string>
     <string name="stft_test_mode">STFT Test Mode</string>
     <string name="press_to_transcribe">Press the button to start transcribing</string>
     <string name="transcription_in_progress">Transcription in progress…</string>
-    <string name="no_internet">No internet connection detect. Connect to the internet and try again.</string>
+    <string name="no_internet">No internet connection detected. Connect to the internet and try again.</string>
     <string name="choose_number_of_sources">Choose number of sources: </string>
 </resources>
