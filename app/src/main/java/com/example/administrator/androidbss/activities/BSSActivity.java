@@ -130,6 +130,7 @@ public class BSSActivity extends AppCompatActivity implements AdapterView.OnItem
     AtomicBoolean isBssRunning = new AtomicBoolean(false);
     AtomicBoolean isBssCompleted = new AtomicBoolean(false);
     AtomicBoolean isPlayingBack = new AtomicBoolean(false);
+    AtomicBoolean isPlaySrc = new AtomicBoolean(true);
     public AtomicBoolean isSaved = new AtomicBoolean(false);
 
     public static final String FILE_NAME_NO_EXT = "com.example.administrator.FILE_NAME_NO_EXT";
@@ -276,9 +277,11 @@ public class BSSActivity extends AppCompatActivity implements AdapterView.OnItem
                     String filePath;
                     if (playbackSrc < 1){
                         progressBar.setText("Playing back input mixture").show();
+                        isPlaySrc.set(true);
                         filePath = file.getAbsolutePath();
                     }else{
                         progressBar.setText("Playing back source " + playbackSrc).show();
+                        isPlaySrc.set(false);
                         filePath = pcmFiles[playbackSrc-1].getAbsolutePath();
                     }
 
@@ -839,7 +842,7 @@ public class BSSActivity extends AppCompatActivity implements AdapterView.OnItem
 
             int bufferSize;
 
-            if (multichannelOutput) {
+            if (multichannelOutput || isPlaySrc.get()) {
                 bufferSize = android.media.AudioTrack.getMinBufferSize(
                         samplingRate,
                         AudioFormat.CHANNEL_OUT_STEREO,
