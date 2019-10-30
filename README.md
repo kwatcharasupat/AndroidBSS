@@ -1,4 +1,4 @@
-# CY1400-BlindSourceSeparation
+# AndroidBSS
 Android Implementation of Blind Source Separation with Automatic Speech Recognition
 by Karn Watcharasupat
 
