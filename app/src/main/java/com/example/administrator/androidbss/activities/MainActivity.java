@@ -45,7 +45,6 @@ public class MainActivity extends AppCompatActivity {
     private static final int BUFFER_SIZE_FACTOR = 2; // preemptively allocated space
     private static final int BUFFER_SIZE = AudioRecord.getMinBufferSize(SAMPLING_RATE_IN_HZ, CHANNEL_CONFIG, AUDIO_FORMAT) * BUFFER_SIZE_FACTOR;
 
-
     private int nChannels = 2;
 
     private AudioRecord recorder = null;
@@ -73,6 +72,8 @@ public class MainActivity extends AppCompatActivity {
     public static final String NUM_CHANNELS = "com.example.administrator.NUM_SOURCES";
     public static final String SAMPLING_RATE = "com.example.administrator.SAMPLING_RATE";
 
+    private Switch switchTestMode;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -84,7 +85,7 @@ public class MainActivity extends AppCompatActivity {
         requestNetworkStatePermission();
         requestWakeLockPermission();
 
-        Switch switchTestMode = findViewById(R.id.switchTestMode);
+        switchTestMode = findViewById(R.id.switchTestMode);
 
 //        switchTestMode.setVisibility(View.INVISIBLE);
 
@@ -539,17 +540,15 @@ public class MainActivity extends AppCompatActivity {
 
     public void launchBssActivity(View view) {
 
+        if(!isTestMode.get() && fileName == null){
+            Snackbar.make(findViewById(R.id.fabRecord), "No recording has been made yet", Snackbar.LENGTH_SHORT).show();
+            return;
+        }
+
         if(!isSaved.get() && !isTestMode.get()){
             saveThread = new Thread(new SaveRunnable(), "save thread");
             saveThread.start();
         }
-
-
-        if(fileName == null){
-            Snackbar.make(findViewById(R.id.fabRecord), "No recording has been made yet", Snackbar.LENGTH_SHORT).show();
-        }
-
-
 
         Log.i("DEBUG", "Launching next activity");
 
@@ -557,8 +556,33 @@ public class MainActivity extends AppCompatActivity {
 
         if (isTestMode.get()) {
 
-            fileNameNoExt = "mixture_otd_2src_config2";
-            fileName = fileNameNoExt + ".pcm";
+            String tempFileNameNoExt = "mixture_otd_3src_config1";
+            String tempFileName = tempFileNameNoExt + ".pcm";
+
+            File file = new File(getExternalStorageDirectory().getAbsolutePath() + File.separator + tempFileName);
+
+            if(file.exists()) {
+                fileName = tempFileName;
+                fileNameNoExt = tempFileNameNoExt;
+                Snackbar.make(findViewById(R.id.fabRecord), "Test mode (2 sources).", Snackbar.LENGTH_SHORT).show();
+
+                File Wavfile = new File(getExternalStorageDirectory().getAbsolutePath(), fileNameNoExt + "_stereo.wav");
+
+                if(!Wavfile.exists()) {
+                    AudioFileWriter rtw = new AudioFileWriter(2, SAMPLING_RATE_IN_HZ, 16);
+                    try {
+                        rtw.convertPcmToWav(file, Wavfile);
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                }
+
+            } else {
+                Snackbar.make(findViewById(R.id.fabRecord), "Test mode file does not exist. Disabling test mode.", Snackbar.LENGTH_SHORT).show();
+                isTestMode.set(false);
+                switchTestMode.setChecked(false);
+                return;
+            }
         }
 
         intent.putExtra(FILE_NAME, fileName);

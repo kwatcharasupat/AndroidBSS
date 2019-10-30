@@ -47,7 +47,7 @@ public class PermutationAlignment {
         return this;
     }
 
-    public PermutationAlignment setFinetuningEnabled(boolean fineTune) {
+    public PermutationAlignment setEnabledFinetune(boolean fineTune) {
         this.fineTune = fineTune;
         return this;
     }

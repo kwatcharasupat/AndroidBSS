@@ -55,6 +55,7 @@ import static android.os.Debug.stopMethodTracing;
 import static android.os.Environment.getExternalStorageDirectory;
 import static android.support.design.widget.Snackbar.LENGTH_SHORT;
 import static com.example.administrator.androidbss.audioprocessing.commons.stft.WindowFunctions.PERIODIC_HAMMING_WINDOW;
+import static com.example.administrator.androidbss.audioprocessing.commons.stft.WindowFunctions.SINE_WINDOW;
 import static org.apache.commons.math3.util.FastMath.abs;
 
 public class BSSActivity extends AppCompatActivity implements AdapterView.OnItemSelectedListener {
@@ -121,7 +122,7 @@ public class BSSActivity extends AppCompatActivity implements AdapterView.OnItem
 
     /* for playback */
 
-    AudioTrack audioTrack;
+    AudioTrack audioTrack = null;
 
     /* debugging */
 
@@ -129,7 +130,7 @@ public class BSSActivity extends AppCompatActivity implements AdapterView.OnItem
     AtomicBoolean isBssRunning = new AtomicBoolean(false);
     AtomicBoolean isBssCompleted = new AtomicBoolean(false);
     AtomicBoolean isPlayingBack = new AtomicBoolean(false);
-    AtomicBoolean isSaved = new AtomicBoolean(false);
+    public AtomicBoolean isSaved = new AtomicBoolean(false);
 
     public static final String FILE_NAME_NO_EXT = "com.example.administrator.FILE_NAME_NO_EXT";
     public static final String NUM_SOURCES = "com.example.administrator.NUM_SOURCES";
@@ -247,7 +248,7 @@ public class BSSActivity extends AppCompatActivity implements AdapterView.OnItem
                 wavThread = new Thread(new WavThread(), "PCM to Wav Thread");
                 wavThread.start();
             } else {
-                progressBar.setText("AuxIVA is not completed yet").show();
+                progressBar.setText("Source separation is not completed yet").show();
             }
         });
 
@@ -271,10 +272,16 @@ public class BSSActivity extends AppCompatActivity implements AdapterView.OnItem
                     pausePlayback();
 
                 } else {
-                    progressBar.setText("Playing back source " + (playbackSrc + 1)).show();
                     fabPlaySrc.setImageDrawable(ContextCompat.getDrawable(getApplicationContext(), R.drawable.ic_round_pause_24px));
+                    String filePath;
+                    if (playbackSrc < 1){
+                        progressBar.setText("Playing back input mixture").show();
+                        filePath = file.getAbsolutePath();
+                    }else{
+                        progressBar.setText("Playing back source " + playbackSrc).show();
+                        filePath = pcmFiles[playbackSrc-1].getAbsolutePath();
+                    }
 
-                    String filePath = pcmFiles[playbackSrc].getAbsolutePath();
                     playbackThread = new Thread(new PlayRunnable(filePath), "Playback Thread");
                     playbackThread.start();
 
@@ -283,7 +290,7 @@ public class BSSActivity extends AppCompatActivity implements AdapterView.OnItem
                     fabStopPlaySrc.setEnabled(true);
                 }
             } else {
-                progressBar.setText("AuxIVA is not completed yet").show();
+                progressBar.setText("Source separation is not completed yet").show();
             }
         });
 
@@ -370,9 +377,7 @@ public class BSSActivity extends AppCompatActivity implements AdapterView.OnItem
                 progressBar.setDuration(Snackbar.LENGTH_INDEFINITE).setText("Separating sources").show();
             });
 
-            startMethodTracingSampling("auxiva",200000000, 1);
             runAuxIVA();
-            stopMethodTracing();
 
             runOnUiThread(() -> {
                 progressBar.setDuration(Snackbar.LENGTH_SHORT).setText("Reconstructing sources").show();
@@ -387,6 +392,7 @@ public class BSSActivity extends AppCompatActivity implements AdapterView.OnItem
 
             runOnUiThread(() -> {
                 progressBar.setText("AuxIVA completed").show();
+                spinnerPlaybackSrc.setVisibility(View.VISIBLE);
             });
 
 
@@ -424,9 +430,6 @@ public class BSSActivity extends AppCompatActivity implements AdapterView.OnItem
             readPCM();
             rawDataToChannels();
 
-
-            sca = null;
-
             runOnUiThread(() -> {
                 progressBar.setText("Running STFT").show();
             });
@@ -455,7 +458,10 @@ public class BSSActivity extends AppCompatActivity implements AdapterView.OnItem
             runOnUiThread(() -> {
                 progressBar.setText("SCA completed").show();
                 getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+                spinnerPlaybackSrc.setVisibility(View.VISIBLE);
             });
+
+
         }
     }
 
@@ -467,32 +473,18 @@ public class BSSActivity extends AppCompatActivity implements AdapterView.OnItem
         double eta = 10;
         boolean isDerivCheck = false;
         boolean isRowDecoupling = false;
+        double r = -0.5;
 
-        demixedSTFTmulti = new Complex[nSrc][nChannels][nFrames][nFreqs];
-
-        /*boolean isDebugging = true;
-
-        if (isDebugging) {
-
-            //[nChannels][nFrames][nFreqs]
-            Complex[][][] testSTFTarray = new Complex[2][5][1];
-
-            double[][] realX = new double[][]{{-0.1022, 0.3192, -0.8649, -0.1649, 1.0933}, {-0.2414, 0.3129, -0.0301, 0.6277, 1.1093}};
-            double[][] imagX = new double[][]{{-0.8637, -1.2141, -0.0068, -0.7697, -0.2256}, {0.0774, -1.1135, 1.5326, 0.3714, 1.1174}};
-
-            for (int i = 0; i < 2; i++) {
-                for (int j = 0; j < 5; j++) {
-                    testSTFTarray[i][j][0] = new Complex(realX[i][j], imagX[i][j]);
-                }
-            }
-
-            sca = new DirectionalSCA(testSTFTarray, nItr, true, 3, 1e-2, true, false);
-        } else {*/
-        sca = new DirectionalSCA(obsSTFT, maxItr, nSrc, eta, isDerivCheck, isRowDecoupling);
-
-        sca.run();
-
-        demixedSTFTmulti = sca.getSourceEstimatesSTFT();
+        demixedSTFTmulti = DirectionalSCA.initiate()
+                .setNumberOfSources(nSrc)
+                .setMaximumIterations(maxItr)
+                .setLearningRate(eta)
+                .setEnabledRowDecoupling(isRowDecoupling)
+                .setEnabledDerivativeCheck(isDerivCheck)
+                .setPowerMeanExponent(r)
+                .otherwiseUseDefault()
+                .setInputData(obsSTFT)
+                .run();
     }
 
     private class IcaThread implements Runnable {
@@ -538,6 +530,7 @@ public class BSSActivity extends AppCompatActivity implements AdapterView.OnItem
             runOnUiThread(() -> {
                 progressBar.setText("FastICA completed").show();
                 getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+                spinnerPlaybackSrc.setVisibility(View.VISIBLE);
             });
 
         }
@@ -547,14 +540,15 @@ public class BSSActivity extends AppCompatActivity implements AdapterView.OnItem
         multichannelOutput = true;
 
         int maxItr = 100;
+        double r = 1.25;
 
-        demixedSTFTmulti = new Complex[nSrc][nChannels][nFrames][nFreqs];
-
-        fastIca = new FastICA(obsSTFT, maxItr);
-
-        fastIca.run();
-
-        demixedSTFTmulti = fastIca.getSourceEstimatesSTFT();
+        demixedSTFTmulti = FastICA.initiate()
+                .setMaximumIterations(maxItr)
+                .setContrastFunction(FastICA.POWER_CONTRAST)
+                .setContrasFunctionParameters(r)
+                .otherwiseUseDefault()
+                .setInputData(obsSTFT)
+                .run();
     }
 
     /* STFT */
@@ -920,9 +914,15 @@ public class BSSActivity extends AppCompatActivity implements AdapterView.OnItem
             } catch (IOException e) {
                 e.printStackTrace();
             }
-            audioTrack.pause();
-            audioTrack.flush();
-            audioTrack.release();
+
+            try {
+                audioTrack.pause();
+                audioTrack.flush();
+                audioTrack.release();
+            } catch (IllegalStateException e){
+                e.printStackTrace();
+            }
+
 
             isPlayingBack.set(false);
             fabPlaySrc.setImageDrawable(ContextCompat.getDrawable(getApplicationContext(), R.drawable.ic_round_play_arrow_24px));
@@ -955,16 +955,17 @@ public class BSSActivity extends AppCompatActivity implements AdapterView.OnItem
         spinnerPlaybackSrc = findViewById(R.id.spinnerPlaybackSrc);
         spinnerPlaybackSrc.setOnItemSelectedListener(this);
 
-        List<Integer> sourceArray = new ArrayList<>(nSrc);
+        List<String> sourceArray = new ArrayList<>(nSrc);
+        sourceArray.add("Input mixture");
         for (int s = 0; s < nSrc; s++) {
-            sourceArray.add(s + 1);
+            sourceArray.add("Separated source " + Integer.toString(s + 1));
         }
 
-        ArrayAdapter<Integer> adapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, sourceArray);
+        ArrayAdapter<String> adapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, sourceArray);
 
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         spinnerPlaybackSrc.setAdapter(adapter);
-
+        spinnerPlaybackSrc.setVisibility(View.INVISIBLE);
     }
 
     void setBSSspinner() {
@@ -1055,6 +1056,15 @@ public class BSSActivity extends AppCompatActivity implements AdapterView.OnItem
     }
 
     public void launchAsrActivity(View view) {
+
+        try {
+            if(audioTrack != null) {
+                audioTrack.pause();
+                audioTrack.flush();
+            }
+        } catch (IllegalStateException e){
+            e.printStackTrace();
+        }
 
         if (!isBssCompleted.get()) {
             Snackbar.make(view, "Sources have not been separated yet.", LENGTH_SHORT).show();

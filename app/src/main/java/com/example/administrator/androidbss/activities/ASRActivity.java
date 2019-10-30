@@ -246,6 +246,10 @@ public class ASRActivity extends AppCompatActivity implements AdapterView.OnItem
                 stringBuilder.append("\n\n");
                 transcriptions[source] = stringBuilder.toString();
 
+                if (transcriptions[source].trim().isEmpty()){
+                    transcriptions[source] = "* Google Speech returns no result.";
+                }
+
                 Log.i("DEBUG", "done");
             }
         } else {
@@ -288,6 +292,10 @@ public class ASRActivity extends AppCompatActivity implements AdapterView.OnItem
 
                 stringBuilder.append("\n\n");
                 transcriptions[source] = stringBuilder.toString();
+
+                if (transcriptions[source].trim().isEmpty()){
+                    transcriptions[source] = "* Google Speech returns no result.";
+                }
 
                 Log.i("DEBUG", "done");
             }
@@ -376,6 +384,9 @@ public class ASRActivity extends AppCompatActivity implements AdapterView.OnItem
     }
 
     void readTranscription() {
+
+        tvTranscriptions.clearComposingText();
+
         if (readAllSources) {
             stringBuilder = new StringBuilder();
             for (int s = 0; s < nSrc; s++) {

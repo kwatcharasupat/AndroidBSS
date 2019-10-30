@@ -72,7 +72,7 @@ public class WindowFunctions {
             case SINE_WINDOW:
                 return 0.50;
             case PERIODIC_HAMMING_WINDOW:
-                return 0.25;
+                return 0.75;
             default:
                 return 0;
         }

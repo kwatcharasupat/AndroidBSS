@@ -17,8 +17,7 @@
         android:theme="@style/AppTheme">
         <activity android:name="com.example.administrator.androidbss.activities.ASRActivity"></activity>
         <activity android:name="com.example.administrator.androidbss.activities.BSSActivity" />
-        <activity android:name="com.example.administrator.androidbss.activities.MainActivity" />
-        <activity android:name="com.example.administrator.androidbss.ModeActivity">
+        <activity android:name="com.example.administrator.androidbss.activities.MainActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 

@@ -7,7 +7,6 @@ import com.example.administrator.androidbss.audioprocessing.commons.PermutationA
 import com.example.administrator.androidbss.audioprocessing.commons.Whitening;
 
 import org.apache.commons.lang3.ArrayUtils;
-import org.apache.commons.lang3.SerializationUtils;
 import org.apache.commons.math3.complex.Complex;
 import org.apache.commons.math3.complex.ComplexField;
 import org.apache.commons.math3.linear.Array2DRowFieldMatrix;
@@ -21,6 +20,7 @@ import java.util.Random;
 import java.util.stream.IntStream;
 
 import static com.example.administrator.androidbss.audioprocessing.commons.Conjugate.transjugate;
+import static com.example.administrator.androidbss.audioprocessing.commons.Epsilon.EPSILON;
 import static org.apache.commons.math3.util.FastMath.abs;
 import static org.apache.commons.math3.util.FastMath.exp;
 import static org.apache.commons.math3.util.FastMath.pow;
@@ -31,55 +31,109 @@ import static org.apache.commons.math3.util.FastMath.sqrt;
 
 public class DirectionalSCA {
 
-    private final Complex[][][] STFTin;
+    private Complex[][][] input;
     private Complex[][][][] STFTout;
 
-    private int nSrc, maxItr;
+    private int nSrc = 2, maxItr = 100;
     private int nChannels, nFrames, nFreqs;
-    private boolean derivCheck, isRowDecoupling;
+    private boolean isDerivCheck = false, isRowDecoupling = true;
 
-    private final double EPSILON = 1e-8;
-
-    private final double OPTIMUM_TOLERANCE = 1e-5;
-    private final double PROGRESS_TOLERANCE = 1e-9;
+    private double OPTIMUM_TOLERANCE = 1e-5;
+    private double PROGRESS_TOLERANCE = 1e-9;
 
     private Array2DRowFieldMatrix<Complex>[] STFTwhite;
 
     private Complex eta;
 
-    private final double beta = 12.5;
+    private double beta = 12.5;
 
     private double[][][] posteriorProb;
 
+    private double r = -0.5;
 
-    public DirectionalSCA(Complex[][][] STFTin, int maxItr, int nSrc, double eta, boolean derivCheck, boolean isRowDecoupling) {
+    private DirectionalSCA() {
 
-        this.STFTin = SerializationUtils.clone(STFTin);
-
-        this.maxItr = maxItr;
-        this.eta = new Complex(eta);
-
-        this.derivCheck = derivCheck;
-        this.isRowDecoupling = isRowDecoupling;
-
-        this.nSrc = nSrc;
-
-        this.nChannels = STFTin.length;
-        this.nFrames = STFTin[0].length;
-        this.nFreqs = STFTin[0][0].length;
-
-        STFTwhite = new Array2DRowFieldMatrix[nFreqs];
-
-        posteriorProb = new double[nFreqs][nFrames][nSrc];
     }
 
-    public void run() {
+    public static DirectionalSCA initiate() {
+        return new DirectionalSCA();
+    }
+
+    public DirectionalSCA setMaximumIterations(int maxItr) {
+        this.maxItr = maxItr;
+        return this;
+    }
+
+    public DirectionalSCA setNumberOfSources(int nSrc) {
+        this.nSrc = nSrc;
+        return this;
+    }
+
+    public DirectionalSCA setLearningRate(double eta) {
+        this.eta = new Complex(eta);
+        return this;
+    }
+
+    public DirectionalSCA setEnabledDerivativeCheck(boolean isDerivCheck) {
+        this.isDerivCheck = isDerivCheck;
+        return this;
+    }
+
+    public DirectionalSCA setEnabledRowDecoupling(boolean isRowDecoupling) {
+        this.isRowDecoupling = isRowDecoupling;
+        return this;
+    }
+
+    public DirectionalSCA setMaskSoftness(double beta) {
+        this.beta = beta;
+        return this;
+    }
+
+    public DirectionalSCA setProgressTolerance(double progTol) {
+        this.PROGRESS_TOLERANCE = progTol;
+        return this;
+    }
+
+    public DirectionalSCA setOptimumTolerance(double optTol) {
+        this.OPTIMUM_TOLERANCE = optTol;
+        return this;
+    }
+
+    public DirectionalSCA setPowerMeanExponent(double r) {
+        this.r = r;
+        return this;
+    }
+
+    public DirectionalSCA setInputData(Complex[][][] input) {
+        this.nChannels = input.length;
+        this.nFrames = input[0].length;
+        this.nFreqs = input[0][0].length;
+
+        this.input = new Complex[nChannels][nFrames][nFreqs];
+
+        for (int c = 0; c < nChannels; c++) {
+            for (int t = 0; t < nFrames; t++) {
+                System.arraycopy(input[c][t], 0, this.input[c][t], 0, nFreqs);
+            }
+        }
+
+        return this;
+    }
+
+    public DirectionalSCA otherwiseUseDefault() {
+        return this;
+    }
+
+    public Complex[][][][] run() {
         Log.i("DEBUG", "whitening");
         whiten();
         Log.i("DEBUG", "separating");
+        posteriorProb = new double[nFreqs][nFrames][nSrc];
         IntStream.range(0, nFreqs).parallel().forEach(this::runThisFreq);
         Log.i("DEBUG", "aligning");
         permutationAlignment();
+
+        return STFTout;
     }
 
 
@@ -88,7 +142,7 @@ public class DirectionalSCA {
         double[][][] P = PermutationAlignment.initiate()
                 .setMaximumIterations(10)
                 .setProgressTolerance(1e-3)
-                .setFinetuningEnabled(true)
+                .setEnabledFinetune(true)
                 .setInputData(posteriorProb)
                 .run();
 
@@ -103,7 +157,7 @@ public class DirectionalSCA {
                     int finalC = c;
                     int finalT = t;
                     IntStream.range(0, nFreqs).parallel().forEach(f -> {
-                        STFTout[finalS][finalC][finalT][f] = STFTin[finalC][finalT][f].multiply(P[f][finalT][finalS]);
+                        STFTout[finalS][finalC][finalT][f] = input[finalC][finalT][f].multiply(P[f][finalT][finalS]);
                     });
                 }
             }
@@ -117,11 +171,11 @@ public class DirectionalSCA {
 
         /*
         IMPORTANT:
-        STFTin is nChannels by nFrames by nFreq to match STFT's output
+        input is nChannels by nFrames by nFreq to match STFT's output
         However, STFTout is nFreq by nChannels by nFrames to simplify further calculations
         */
 
-        Whitening whitening = new Whitening(STFTin);
+        Whitening whitening = new Whitening(input);
         whitening.run();
         STFTwhite = whitening.getWhitenedMatrixArray(); // nFreqs x (nChannels x nFrames)
     }
@@ -208,7 +262,7 @@ public class DirectionalSCA {
         /* normalizing A */
         A = normalizeA(A);
 
-        if (derivCheck) {
+        if (isDerivCheck) {
             checkDerivative(A, X_bar);
         }
 
@@ -343,7 +397,7 @@ public class DirectionalSCA {
 
     private void checkDerivative(Array2DRowFieldMatrix<Complex> A, Array2DRowFieldMatrix<Complex> X_bar) {
 
-        PowerMeanContrast contrast = new PowerMeanContrast(-0.5, isRowDecoupling);
+        PowerMeanContrast contrast = new PowerMeanContrast(r, isRowDecoupling);
 
 
             /*Log.i("DEBUG", "Testing contrast function");
@@ -441,295 +495,289 @@ public class DirectionalSCA {
 
     }
 
-public class PowerMeanContrast {
+    public class PowerMeanContrast {
 
-    double double_r, double_inv_r, double_1minusr;
-    int int_r, int_inv_r, int_1minusr;
+        double double_r, double_inv_r, double_1minusr;
+        int int_r, int_inv_r, int_1minusr;
 
-    boolean isrIntegerValued, isInvrIntegerValued, isrNegInf = false;
+        boolean isrIntegerValued, isInvrIntegerValued, isrNegInf = false;
 
-    double g = 0.0;
-    double[][] dg;
+        double g = 0.0;
+        double[][] dg;
 
-    double cost;
+        double cost;
 
-    boolean isRowDecoupling;
+        boolean isRowDecoupling;
 
-    ComplexSingularValueDecomposition csvd;
-    Array2DRowFieldMatrix<Complex> grad;
+        ComplexSingularValueDecomposition csvd;
+        Array2DRowFieldMatrix<Complex> grad;
 
-    Array2DRowFieldMatrix<Complex> Sinv, C;
-    Complex[] Sdiag;
-    Array2DRowFieldMatrix<Complex> U, UH, V, VH, S, SS;
+        Array2DRowFieldMatrix<Complex> Sinv, C;
+        Complex[] Sdiag;
+        Array2DRowFieldMatrix<Complex> U, UH, V, VH, S, SS;
 
-    int nChannels, nSrc, nFrames;
+        int nChannels, nSrc, nFrames;
 
-    PowerMeanContrast(double r, boolean isRowDecoupling) {
+        PowerMeanContrast(double r, boolean isRowDecoupling) {
 
-        if (r == Double.NEGATIVE_INFINITY) {
-            isrNegInf = true;
-        } else if (r % 1 == 0) {
-            isrIntegerValued = true;
-            this.int_r = (int) r;
-            this.int_1minusr = (int) (1.0 - r);
-        } else {
-            isrIntegerValued = false;
-            this.double_r = r;
-            this.double_1minusr = 1.0 - r;
-        }
-
-        if ((1.0 / r) % 1 == 0) {
-            isInvrIntegerValued = true;
-            this.int_inv_r = (int) (1.0 / r);
-            double_inv_r = int_inv_r;
-        } else {
-            isInvrIntegerValued = false;
-            double_inv_r = 1.0 / r;
-        }
-
-        this.isRowDecoupling = isRowDecoupling;
-    }
-
-    private void computeCost(Array2DRowFieldMatrix<Complex> A, Array2DRowFieldMatrix<Complex> X_bar) {
-
-        nChannels = A.getRowDimension();
-        nSrc = A.getColumnDimension();
-        nFrames = X_bar.getColumnDimension();
-
-        dg = new double[nSrc][nFrames];
-
-        Array2DRowFieldMatrix<Complex> Aorth;
-        Complex[][] AorthArray = A.getData();
-
-        if (isRowDecoupling) {
-            csvd = new ComplexSingularValueDecomposition(A, true);
-
-            U = csvd.getU();
-            UH = csvd.getUH();
-
-            V = csvd.getV();
-            VH = csvd.getVH();
-
-            S = csvd.getS();
-            Sinv = csvd.getPoweredS(-1);
-            Sdiag = csvd.getSentryComplex(); //size = nChannels
-
-            Aorth = U.multiply(VH);
-            AorthArray = Aorth.getData();
-        }
-
-        /* Column norm normalization */
-
-        double[] colNorm = new double[nSrc];
-        Complex[][] AnormArray = new Complex[nChannels][nSrc];
-
-        for (int s = 0; s < nSrc; s++) {
-            colNorm[s] = 0.0;
-            for (int c = 0; c < nChannels; c++) {
-                colNorm[s] += pow(AorthArray[c][s].abs(), 2);
+            if (r == Double.NEGATIVE_INFINITY) {
+                isrNegInf = true;
+            } else if (r % 1 == 0) {
+                isrIntegerValued = true;
+                this.int_r = (int) r;
+                this.int_1minusr = (int) (1.0 - r);
+            } else {
+                isrIntegerValued = false;
+                this.double_r = r;
+                this.double_1minusr = 1.0 - r;
             }
-            colNorm[s] = sqrt(colNorm[s] + EPSILON);
+
+            if ((1.0 / r) % 1 == 0) {
+                isInvrIntegerValued = true;
+                this.int_inv_r = (int) (1.0 / r);
+                double_inv_r = int_inv_r;
+            } else {
+                isInvrIntegerValued = false;
+                double_inv_r = 1.0 / r;
+            }
+
+            this.isRowDecoupling = isRowDecoupling;
         }
 
-        for (int c = 0; c < nChannels; c++) {
+        private void computeCost(Array2DRowFieldMatrix<Complex> A, Array2DRowFieldMatrix<Complex> X_bar) {
+
+            nChannels = A.getRowDimension();
+            nSrc = A.getColumnDimension();
+            nFrames = X_bar.getColumnDimension();
+
+            dg = new double[nSrc][nFrames];
+
+            Array2DRowFieldMatrix<Complex> Aorth;
+            Complex[][] AorthArray = A.getData();
+
+            if (isRowDecoupling) {
+                csvd = new ComplexSingularValueDecomposition(A, true);
+
+                U = csvd.getU();
+                UH = csvd.getUH();
+
+                V = csvd.getV();
+                VH = csvd.getVH();
+
+                S = csvd.getS();
+                Sinv = csvd.getPoweredS(-1);
+                Sdiag = csvd.getSentryComplex(); //size = nChannels
+
+                Aorth = U.multiply(VH);
+                AorthArray = Aorth.getData();
+            }
+
+            /* Column norm normalization */
+
+            double[] colNorm = new double[nSrc];
+            Complex[][] AnormArray = new Complex[nChannels][nSrc];
+
             for (int s = 0; s < nSrc; s++) {
-                AnormArray[c][s] = AorthArray[c][s].divide(colNorm[s]);
+                colNorm[s] = 0.0;
+                for (int c = 0; c < nChannels; c++) {
+                    colNorm[s] += pow(AorthArray[c][s].abs(), 2);
+                }
+                colNorm[s] = sqrt(colNorm[s] + EPSILON);
             }
-        }
 
-        Array2DRowFieldMatrix<Complex> Anorm = new Array2DRowFieldMatrix<>(AnormArray);
-        Array2DRowFieldMatrix<Complex> angle = transjugate(Anorm).multiply(X_bar); //nSrc by nFrames
-
-        /* calculating contrast function */
-        Array2DRowRealMatrix Y2 = new Array2DRowRealMatrix(nSrc, nFrames);
-        for (int s = 0; s < nSrc; s++) {
-            for (int t = 0; t < nFrames; t++) {
-                Y2.setEntry(s, t, pow(angle.getEntry(s, t).abs(), 2));
-            }
-        }
-
-        contrast(Y2); //return values go into g and dg
-
-        /* scaling */
-        double scale = 1.0;
-        cost = (scale / nFrames) * g;
-
-        Array2DRowFieldMatrix<Complex> angle_dg = (Array2DRowFieldMatrix<Complex>) angle.copy();
-        for (int s = 0; s < nSrc; s++) {
-            for (int t = 0; t < nFrames; t++) {
-                angle_dg.multiplyEntry(s, t, new Complex(dg[s][t]));
-            }
-        }
-
-        Array2DRowFieldMatrix<Complex> temp_grad;
-        temp_grad = (Array2DRowFieldMatrix<Complex>) X_bar.multiply(transjugate(angle_dg)).scalarMultiply(new Complex(2.0 * scale / nFrames));
-
-        /* Apply the chain rule through column norm normalization */
-
-        Complex[] Aorth_multiplier = new Complex[nSrc];
-        for (int s = 0; s < nSrc; s++) {
-            Aorth_multiplier[s] = Complex.ZERO;
             for (int c = 0; c < nChannels; c++) {
-                Aorth_multiplier[s] = Aorth_multiplier[s].add(AorthArray[c][s].conjugate().multiply(temp_grad.getEntry(c, s)));
-            }
-            Aorth_multiplier[s] = Aorth_multiplier[s].divide(pow(colNorm[s], 3));
-        }
-
-        Array2DRowFieldMatrix<Complex> tempGrad1 = new Array2DRowFieldMatrix<>(ComplexField.getInstance(), nChannels, nSrc);
-        Array2DRowFieldMatrix<Complex> tempGrad2 = new Array2DRowFieldMatrix<>(ComplexField.getInstance(), nChannels, nSrc);
-
-        for (int c = 0; c < nChannels; c++) {
-            for (int s = 0; s < nSrc; s++) {
-                tempGrad1.setEntry(c, s, temp_grad.getEntry(c, s).divide(colNorm[s]));
-                tempGrad2.setEntry(c, s, AorthArray[c][s].multiply(Aorth_multiplier[s]));
-            }
-        }
-
-        grad = tempGrad1.subtract(tempGrad2);
-
-        if (isRowDecoupling) {
-            SS = new Array2DRowFieldMatrix<>(ComplexField.getInstance(), nChannels, nChannels);
-            for (int ci = 0; ci < nChannels; ci++) {
-                for (int cj = 0; cj < nChannels; cj++) {
-                    SS.setEntry(ci, cj, Sdiag[ci].add(Sdiag[cj]));
+                for (int s = 0; s < nSrc; s++) {
+                    AnormArray[c][s] = AorthArray[c][s].divide(colNorm[s]);
                 }
             }
 
-            C = Sinv.multiply(UH).multiply(grad).multiply(V);
-            for (int ci = 0; ci < nChannels; ci++) {
-                for (int cj = 0; cj < nChannels; cj++) {
-                    C.multiplyEntry(ci, cj, Complex.ONE.divide((SS.getEntry(ci, cj).negate()).add(EPSILON)));
-                }
-            }
+            Array2DRowFieldMatrix<Complex> Anorm = new Array2DRowFieldMatrix<>(AnormArray);
+            Array2DRowFieldMatrix<Complex> angle = transjugate(Anorm).multiply(X_bar); //nSrc by nFrames
 
-            grad = U.multiply(transjugate(C).add(C)).multiply(S).multiply(VH)
-                    .add(U.multiply(Sinv).multiply(UH).multiply(grad));
-        }
-    }
-
-    private Array2DRowFieldMatrix<Complex> getGrad() {
-        return grad;
-    }
-
-    private double getCost() {
-        return cost;
-    }
-
-    private void contrast(Array2DRowRealMatrix Y2) {
-        Array2DRowRealMatrix Y2_contra_mat = new Array2DRowRealMatrix(nSrc, nFrames);
-        double[][] Y2_contra; // = new double[nFrames][nSrc]
-        double[] Y2_contra_min = new double[nFrames];
-        double[] Y2_power_mean_contra = new double[nFrames];
-
-        for (int s = 0; s < nSrc; s++) {
-            for (int t = 0; t < nFrames; t++) {
-                Y2_contra_mat.setEntry(s, t, 1.0 - Y2.getEntry(s, t));
-            }
-        }
-
-        Y2_contra = Y2_contra_mat.getData();
-
-        double colMin;
-        double[] thisCol;
-        int[] colMinIdx = new int[nFrames];
-        int[] colZeroIdx = new int[nFrames];
-        Min min = new Min();
-
-        for (int t = 0; t < nFrames; t++) {
-            thisCol = Y2_contra_mat.getColumn(t);
-            colMin = min.evaluate(thisCol);
-            colZeroIdx[t] = ArrayUtils.indexOf(thisCol, 0.0); //returns -1 if there is no zero
-
-            if (isrNegInf) colMinIdx[t] = ArrayUtils.indexOf(thisCol, colMin);
-
-            Y2_contra_min[t] = colMin;
-        }
-
-        Sum sum = new Sum();
-
-        if (isrNegInf) {
-            g = sum.evaluate(Y2_contra_min);
+            /* calculating contrast function */
+            Array2DRowRealMatrix Y2 = new Array2DRowRealMatrix(nSrc, nFrames);
             for (int s = 0; s < nSrc; s++) {
                 for (int t = 0; t < nFrames; t++) {
-                    if (colMinIdx[t] > -1) { // if there is a zero
-                        dg[colMinIdx[t]][t] = -1;
+                    Y2.setEntry(s, t, pow(angle.getEntry(s, t).abs(), 2));
+                }
+            }
+
+            contrast(Y2); //return values go into g and dg
+
+            /* scaling */
+            double scale = 1.0;
+            cost = (scale / nFrames) * g;
+
+            Array2DRowFieldMatrix<Complex> angle_dg = (Array2DRowFieldMatrix<Complex>) angle.copy();
+            for (int s = 0; s < nSrc; s++) {
+                for (int t = 0; t < nFrames; t++) {
+                    angle_dg.multiplyEntry(s, t, new Complex(dg[s][t]));
+                }
+            }
+
+            Array2DRowFieldMatrix<Complex> temp_grad;
+            temp_grad = (Array2DRowFieldMatrix<Complex>) X_bar.multiply(transjugate(angle_dg)).scalarMultiply(new Complex(2.0 * scale / nFrames));
+
+            /* Apply the chain rule through column norm normalization */
+
+            Complex[] Aorth_multiplier = new Complex[nSrc];
+            for (int s = 0; s < nSrc; s++) {
+                Aorth_multiplier[s] = Complex.ZERO;
+                for (int c = 0; c < nChannels; c++) {
+                    Aorth_multiplier[s] = Aorth_multiplier[s].add(AorthArray[c][s].conjugate().multiply(temp_grad.getEntry(c, s)));
+                }
+                Aorth_multiplier[s] = Aorth_multiplier[s].divide(pow(colNorm[s], 3));
+            }
+
+            Array2DRowFieldMatrix<Complex> tempGrad1 = new Array2DRowFieldMatrix<>(ComplexField.getInstance(), nChannels, nSrc);
+            Array2DRowFieldMatrix<Complex> tempGrad2 = new Array2DRowFieldMatrix<>(ComplexField.getInstance(), nChannels, nSrc);
+
+            for (int c = 0; c < nChannels; c++) {
+                for (int s = 0; s < nSrc; s++) {
+                    tempGrad1.setEntry(c, s, temp_grad.getEntry(c, s).divide(colNorm[s]));
+                    tempGrad2.setEntry(c, s, AorthArray[c][s].multiply(Aorth_multiplier[s]));
+                }
+            }
+
+            grad = tempGrad1.subtract(tempGrad2);
+
+            if (isRowDecoupling) {
+                SS = new Array2DRowFieldMatrix<>(ComplexField.getInstance(), nChannels, nChannels);
+                for (int ci = 0; ci < nChannels; ci++) {
+                    for (int cj = 0; cj < nChannels; cj++) {
+                        SS.setEntry(ci, cj, Sdiag[ci].add(Sdiag[cj]));
                     }
                 }
-            }
-        } else {
-            double thisFramePowerSum;
-            g = 0.0;
 
-            double nSrcPowered;
-            if (isInvrIntegerValued) {
-                nSrcPowered = pow(nSrc, int_inv_r);
-            } else {
-                nSrcPowered = pow(nSrc, double_inv_r);
-            }
-
-            for (int t = 0; t < nFrames; t++) {
-                if (colZeroIdx[t] > -1) {
-                    Y2_power_mean_contra[t] = 0;
-                    continue;
+                C = Sinv.multiply(UH).multiply(grad).multiply(V);
+                for (int ci = 0; ci < nChannels; ci++) {
+                    for (int cj = 0; cj < nChannels; cj++) {
+                        C.multiplyEntry(ci, cj, Complex.ONE.divide((SS.getEntry(ci, cj).negate()).add(EPSILON)));
+                    }
                 }
 
-                thisFramePowerSum = 0.0;
+                grad = U.multiply(transjugate(C).add(C)).multiply(S).multiply(VH)
+                        .add(U.multiply(Sinv).multiply(UH).multiply(grad));
+            }
+        }
+
+        private Array2DRowFieldMatrix<Complex> getGrad() {
+            return grad;
+        }
+
+        private double getCost() {
+            return cost;
+        }
+
+        private void contrast(Array2DRowRealMatrix Y2) {
+            Array2DRowRealMatrix Y2_contra_mat = new Array2DRowRealMatrix(nSrc, nFrames);
+            double[][] Y2_contra; // = new double[nFrames][nSrc]
+            double[] Y2_contra_min = new double[nFrames];
+            double[] Y2_power_mean_contra = new double[nFrames];
+
+            for (int s = 0; s < nSrc; s++) {
+                for (int t = 0; t < nFrames; t++) {
+                    Y2_contra_mat.setEntry(s, t, 1.0 - Y2.getEntry(s, t));
+                }
+            }
+
+            Y2_contra = Y2_contra_mat.getData();
+
+            double colMin;
+            double[] thisCol;
+            int[] colMinIdx = new int[nFrames];
+            int[] colZeroIdx = new int[nFrames];
+            Min min = new Min();
+
+            for (int t = 0; t < nFrames; t++) {
+                thisCol = Y2_contra_mat.getColumn(t);
+                colMin = min.evaluate(thisCol);
+                colZeroIdx[t] = ArrayUtils.indexOf(thisCol, 0.0); //returns -1 if there is no zero
+
+                if (isrNegInf) colMinIdx[t] = ArrayUtils.indexOf(thisCol, colMin);
+
+                Y2_contra_min[t] = colMin;
+            }
+
+            Sum sum = new Sum();
+
+            if (isrNegInf) {
+                g = sum.evaluate(Y2_contra_min);
+                for (int s = 0; s < nSrc; s++) {
+                    for (int t = 0; t < nFrames; t++) {
+                        if (colMinIdx[t] > -1) { // if there is a zero
+                            dg[colMinIdx[t]][t] = -1;
+                        }
+                    }
+                }
+            } else {
+                double thisFramePowerSum;
+                g = 0.0;
+
+                double nSrcPowered;
+                if (isInvrIntegerValued) {
+                    nSrcPowered = pow(nSrc, int_inv_r);
+                } else {
+                    nSrcPowered = pow(nSrc, double_inv_r);
+                }
+
+                for (int t = 0; t < nFrames; t++) {
+                    if (colZeroIdx[t] > -1) {
+                        Y2_power_mean_contra[t] = 0;
+                        continue;
+                    }
+
+                    thisFramePowerSum = 0.0;
+
+                    if (isrIntegerValued) {
+                        for (int s = 0; s < nSrc; s++) {
+                            thisFramePowerSum += pow(Y2_contra[s][t] / Y2_contra_min[t], int_r);
+                        }
+                    } else {
+                        for (int s = 0; s < nSrc; s++) {
+                            thisFramePowerSum += pow(Y2_contra[s][t] / Y2_contra_min[t], double_r);
+                        }
+                    }
+
+                    if (isInvrIntegerValued) {
+                        thisFramePowerSum = pow(thisFramePowerSum, int_inv_r);
+                        Y2_power_mean_contra[t] = thisFramePowerSum * Y2_contra_min[t] / nSrcPowered;
+                    } else {
+                        thisFramePowerSum = pow(thisFramePowerSum, double_inv_r);
+                        Y2_power_mean_contra[t] = thisFramePowerSum * Y2_contra_min[t] / nSrcPowered;
+                    }
+
+                    g += Y2_power_mean_contra[t];
+                }
+
+                double zeroDg = -1.0 / pow(nSrc, double_inv_r);
 
                 if (isrIntegerValued) {
                     for (int s = 0; s < nSrc; s++) {
-                        thisFramePowerSum += pow(Y2_contra[s][t] / Y2_contra_min[t], int_r);
+                        for (int t = 0; t < nFrames; t++) {
+                            if (colZeroIdx[t] == s) {
+                                for (int tt = 0; tt < nFrames; tt++) {
+                                    dg[s][tt] = zeroDg;
+                                }
+                                break; //no need to iterate thru the frames anymore
+                            }
+
+                            dg[s][t] = -pow(Y2_power_mean_contra[t] / Y2_contra[s][t], int_1minusr) / (double) nSrc;
+                        }
                     }
                 } else {
                     for (int s = 0; s < nSrc; s++) {
-                        thisFramePowerSum += pow(Y2_contra[s][t] / Y2_contra_min[t], double_r);
-                    }
-                }
-
-                if (isInvrIntegerValued) {
-                    thisFramePowerSum = pow(thisFramePowerSum, int_inv_r);
-                    Y2_power_mean_contra[t] = thisFramePowerSum * Y2_contra_min[t] / nSrcPowered;
-                } else {
-                    thisFramePowerSum = pow(thisFramePowerSum, double_inv_r);
-                    Y2_power_mean_contra[t] = thisFramePowerSum * Y2_contra_min[t] / nSrcPowered;
-                }
-
-                g += Y2_power_mean_contra[t];
-            }
-
-            double zeroDg = -1.0 / pow(nSrc, double_inv_r);
-
-            if (isrIntegerValued) {
-                for (int s = 0; s < nSrc; s++) {
-                    for (int t = 0; t < nFrames; t++) {
-                        if (colZeroIdx[t] == s) {
-                            for (int tt = 0; tt < nFrames; tt++) {
-                                dg[s][tt] = zeroDg;
+                        for (int t = 0; t < nFrames; t++) {
+                            if (colZeroIdx[t] == s) {
+                                dg[s][t] = 0;
+                            } else {
+                                dg[s][t] = -pow(Y2_power_mean_contra[t] / Y2_contra[s][t], double_1minusr) / (double) nSrc;
                             }
-                            break; //no need to iterate thru the frames anymore
                         }
-
-                        dg[s][t] = -pow(Y2_power_mean_contra[t] / Y2_contra[s][t], int_1minusr) / (double) nSrc;
-                    }
-                }
-            } else {
-                for (int s = 0; s < nSrc; s++) {
-                    for (int t = 0; t < nFrames; t++) {
-                        if (colZeroIdx[t] == s) {
-                            for (int tt = 0; tt < nFrames; tt++) {
-                                dg[s][tt] = zeroDg;
-                            }
-                            break; //no need to iterate thru the frames anymore
-                        }
-                        dg[s][t] = -pow(Y2_power_mean_contra[t] / Y2_contra[s][t], double_1minusr) / (double) nSrc;
                     }
                 }
             }
         }
-    }
 
-}
-
-    public Complex[][][][] getSourceEstimatesSTFT() {
-        return STFTout;
     }
 }

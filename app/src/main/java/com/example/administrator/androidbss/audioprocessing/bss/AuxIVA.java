@@ -13,9 +13,10 @@ import java.util.Arrays;
 import java.util.stream.IntStream;
 
 import static com.example.administrator.androidbss.audioprocessing.commons.Conjugate.conjugate;
+import static com.example.administrator.androidbss.audioprocessing.commons.Conjugate.transjugate;
+import static com.example.administrator.androidbss.audioprocessing.commons.Epsilon.EPSILON;
 import static org.apache.commons.math3.util.FastMath.cosh;
 import static org.apache.commons.math3.util.FastMath.log;
-import static org.apache.commons.math3.util.FastMath.pow;
 import static org.apache.commons.math3.util.FastMath.sqrt;
 import static org.apache.commons.math3.util.FastMath.tanh;
 
@@ -32,16 +33,13 @@ public class AuxIVA {
 
     private Array2DRowFieldMatrix<Complex>[][] V; // freq by src by (chan x chan)
     private Array2DRowFieldMatrix<Complex>[] W; // freq by (chan by src)
-    private Array2DRowFieldMatrix<Complex>[] Wconj; // freq by (chan by src)
     private Array2DRowFieldMatrix<Complex>[] X; // freq by (frm x chan)
-    private Array2DRowFieldMatrix<Complex>[] Xcopy; // freq by (frm x chan)
 
     private Array2DRowFieldMatrix<Complex>[] Xconj;
     private Array2DRowFieldMatrix<Complex>[] Y; // freq by (frm x chan)
 
     private Complex[][] G_r; // src by (frm by frm)
 
-    private double EPSILON = 1e-8;
     private Complex[] norm, inorm;
     private Array2DRowFieldMatrix<Complex>[] w, WV;
     private FieldDecompositionSolver<Complex>[] solver;
@@ -119,29 +117,20 @@ public class AuxIVA {
         this.STFTin = SerializationUtils.clone(STFTin);
 
         X = new Array2DRowFieldMatrix[nFreqs];
-        Xcopy = new Array2DRowFieldMatrix[nFreqs];
         Xconj = new Array2DRowFieldMatrix[nFreqs];
         Y = new Array2DRowFieldMatrix[nFreqs];
         IntStream.range(0, nFreqs).parallel().forEach(f -> {
             Complex[][] temp = new Complex[nFrames][nChannels];
-            Complex[][] tempConj = new Complex[nFrames][nChannels];
-
             for (int t = 0; t < this.nFrames; t++) {
                 for (int c = 0; c < this.nChannels; c++) {
                     temp[t][c] = STFTin[c][t][f];
-                    tempConj[t][c] = STFTin[c][t][f].conjugate();
-                    //Log.i("DEBUG", "STFTin[c][t][f] = " + STFTin[c][t][f] + ", temp[c] = " + temp[c]);
                 }
             }
-            X[f] = new Array2DRowFieldMatrix<>(temp);
-            Xconj[f] = new Array2DRowFieldMatrix<>(tempConj);
-        });
-
-
-        IntStream.range(0, nFreqs).parallel().forEach(f -> {
-            Xcopy[f] = (Array2DRowFieldMatrix<Complex>) X[f].copy();
+            X[f] = new Array2DRowFieldMatrix<>(temp, false);
             Y[f] = (Array2DRowFieldMatrix<Complex>) X[f].copy();
+            Xconj[f] = transjugate(X[f]);
         });
+
 
         /*
         System.arraycopy(X, 0, Xcopy, 0, nFreqs);
@@ -162,23 +151,18 @@ public class AuxIVA {
         // initializing the demixing matrix
         //Log.i("DEBUG", "Initializing demixing matrix");
         W = new Array2DRowFieldMatrix[nFreqs];
-        Wconj = new Array2DRowFieldMatrix[nFreqs];
         if (W0 == null) {
             //Log.i("DEBUG", "Initializing with identity");
             IntStream.range(0, nFreqs).parallel().forEach(f -> {
                 W[f] = (Array2DRowFieldMatrix<Complex>) Identity.copy();
-                Wconj[f] = (Array2DRowFieldMatrix<Complex>) W[f].copy();
             });
             //Log.i("DEBUG", "Initializing with identity - done");
         } else {
             //Log.i("DEBUG", "Initializing with specified value");
             IntStream.range(0, nFreqs).parallel().forEach(f -> {
-                W[f] = new Array2DRowFieldMatrix<>(W0[f]);
+                W[f] = new Array2DRowFieldMatrix<>(W0[f], false);
             });
         }
-
-        // initializing the separated source matrix
-        this.STFTout = new Complex[this.nSrc][this.nFrames][this.nFreqs];
 
         // initializing contrast function and related variables
         this.cFunc = cFunc;
@@ -214,9 +198,13 @@ public class AuxIVA {
         //Log.i("DEBUG", "AuxIVA now running");
 
         for (int epoch = 0; epoch < nItr; epoch++) {
+            Log.i("DEBUG", "iter = " + epoch);
             demix(Y, X, W);
+            Log.i("DEBUG", "G");
             calculateG();
+            Log.i("DEBUG", "V");
             calculateV();
+            Log.i("DEBUG", "update");
             updateDemix();
         }
 
@@ -229,11 +217,16 @@ public class AuxIVA {
     }
 
     private void calculateG() {
+        Complex[][][] Yarray = new Complex[nFreqs][][];
+        IntStream.range(0, nFreqs).parallel().forEach(f -> {
+            Yarray[f] = Y[f].getDataRef();
+        });
+
         IntStream.range(0, nFrames).parallel().forEach(t -> {
             for (int s = 0; s < nSrc; s++) {
                 r[t][s] = 0.0;
                 for (int f = 0; f < nFreqs; f++) {
-                    r[t][s] += pow(Y[f].getEntry(t, s).abs(), 2);
+                    r[t][s] += Yarray[f][t][s].multiply(Yarray[f][t][s].conjugate()).getReal();
                 }
                 r[t][s] = sqrt(r[t][s]); // nFrames by nSrc
 
@@ -284,17 +277,17 @@ public class AuxIVA {
     }
 
     private void calculateV() {
+
         IntStream.range(0, nFreqs).parallel().forEach(f -> {
+            Complex[][] tempX = X[f].getData();
             for (int s = 0; s < nSrc; s++) {
                 for (int t = 0; t < nFrames; t++) {
                     for (int c = 0; c < nChannels; c++) {
-                        Xcopy[f].multiplyEntry(t, c, G_r[t][s]);
+                        tempX[t][c] = tempX[t][c].multiply(G_r[t][s]);
                     }
                 }
 
-                V[f][s] = (Array2DRowFieldMatrix<Complex>) (Xcopy[f].transpose().multiply(Xconj[f])).scalarMultiply(inFrames);
-
-                Xcopy[f] = (Array2DRowFieldMatrix<Complex>) X[f].copy();
+                V[f][s] = (Array2DRowFieldMatrix<Complex>) (Xconj[f].multiply(new Array2DRowFieldMatrix<>(tempX, false))).transpose();//.scalarMultiply(inFrames);
             }
         });
     }
@@ -302,12 +295,12 @@ public class AuxIVA {
     private void updateDemix() {
         IntStream.range(0, nFreqs).parallel().forEach(f -> {
             for (int s = 0; s < nSrc; s++) {
-                WV[f] = (Array2DRowFieldMatrix<Complex>) (Wconj[f].transpose()).multiply(V[f][s]);
+                WV[f] = transjugate(W[f]).multiply(V[f][s]);
                 solver[f] = new FieldLUDecomposition<>(WV[f]).getSolver();
 
                 if (solver[f].isNonSingular()) {
                     w[f] = (Array2DRowFieldMatrix<Complex>) solver[f].solve((Array2DRowFieldMatrix<Complex>) (Identity.getColumnMatrix(s)));
-                    norm[f] = (conjugate(w[f]).transpose().multiply(V[f][s].multiply(w[f]))).getEntry(0, 0).sqrt();
+                    norm[f] = (transjugate(w[f]).multiply(V[f][s].multiply(w[f]))).getEntry(0, 0).sqrt();
                     inorm[f] = Complex.ONE.divide(norm[f]);
                     w[f] = (Array2DRowFieldMatrix<Complex>) w[f].scalarMultiply(inorm[f]);
                     W[f].setColumnMatrix(s, w[f]);
@@ -320,8 +313,7 @@ public class AuxIVA {
 
     private void demix(Array2DRowFieldMatrix<Complex>[] Y, Array2DRowFieldMatrix<Complex>[] X, Array2DRowFieldMatrix<Complex>[] W) {
         IntStream.range(0, nFreqs).parallel().forEach(f -> {
-            Wconj[f] = conjugate(W[f]);
-            Y[f] = X[f].multiply(Wconj[f]);
+            Y[f] = X[f].multiply(conjugate(W[f]));
         });
     }
 
@@ -351,7 +343,7 @@ public class AuxIVA {
                 scale[finalS][f] = Complex.ZERO;
                 for (int t = 0; t < nFrames; t++) {
                     num[finalS][f] = num[finalS][f].add(ref[t][f].conjugate().multiply(out[finalS][t][f]));
-                    denom[finalS][f] += (pow(out[finalS][t][f].abs(), 2));
+                    denom[finalS][f] += out[finalS][t][f].multiply(out[finalS][t][f].conjugate()).getReal();
                 }
                 if (denom[finalS][f] > 0) {
                     scale[finalS][f] = num[finalS][f].divide(denom[finalS][f]);
@@ -362,10 +354,16 @@ public class AuxIVA {
     }
 
     private void outMatrixToOutArray() {
+
+        this.STFTout = new Complex[this.nSrc][this.nFrames][this.nFreqs];
+
         IntStream.range(0, nFreqs).parallel().forEach(f -> {
+
+            Complex[][] Yarray = Y[f].getDataRef();
+
             for (int t = 0; t < nFrames; t++) {
                 for (int c = 0; c < this.nSrc; c++) {
-                    STFTout[c][t][f] = Y[f].getEntry(t, c);
+                    STFTout[c][t][f] = Yarray[t][c];
                 }
             }
         });
